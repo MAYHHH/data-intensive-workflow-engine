@@ -60,10 +60,11 @@ public class Task
         try
         {
             DBRecord r = DBRecord.select("workflow_task",
-                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd "
+                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status "
                     + " FROM workflow_task t JOIN workflow w ON t.wfid = w.wfid "
                     + " WHERE t.name='" + wfname+":"+name + "'").get(0);
             Task t = new Task(r.get("name"), r.getDouble("estopr"), r.get("wname"), r.getInt("wfid"), r.get("cmd"), r.getInt("tid"));
+            t.status = r.get("status").charAt(0);
             return t;
         }
         catch (IndexOutOfBoundsException ex)
@@ -76,10 +77,11 @@ public class Task
         try
         {
             DBRecord r = DBRecord.select("workflow_task",
-                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd"
+                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status "
                     + " FROM workflow_task t JOIN workflow w ON t.wfid = w.wfid "
                     + " WHERE t.tid='" + dbid + "'").get(0);
             Task t = new Task(r.get("name"), r.getDouble("estopr"), r.get("wname"), r.getInt("wfid"), r.get("cmd"), r.getInt("tid"));
+            t.status = r.get("status").charAt(0);
             return t;
         }
         catch (ArrayIndexOutOfBoundsException ex)
@@ -93,6 +95,11 @@ public class Task
         return wfdbid;
     }
 
+    public char getStatus()
+    {
+        return status;
+    }
+    
     public void setCmd(String cmd)
     {
         this.cmd = cmd;
@@ -133,17 +140,8 @@ public class Task
 //            throw new IllegalStateException("This task is not inserted yet.");
 //        }
 //    }
-    public static int updateTaskStatus(int tid, long start, long end, int exitValue)
+    public static int updateTaskStatus(int tid, long start, long end, int exitValue, char status)
     {
-        char status;
-        if(exitValue > 0)
-        {
-            status = 'F';
-        }
-        else
-        {
-            status = end == -1 ? 'E':'C';
-        }
         return DBRecord.update("UPDATE workflow_task "
                 + "SET start='"+start+"', finish='"+end+"', exit_value='"+exitValue+"', status='"+status+"' "
                 + "WHERE tid='"+tid+"'");

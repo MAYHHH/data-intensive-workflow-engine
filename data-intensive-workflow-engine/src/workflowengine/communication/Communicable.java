@@ -11,13 +11,15 @@ package workflowengine.communication;
 import java.io.*;
 import java.net.*;
 import java.util.HashMap;
+import java.util.Random;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Communicable
 {
     private HashMap<String, Socket> connections = new HashMap<>();
-
+    private static Random r = new Random();
     public void startServer(final int port)
     {
         Thread serverThread = new Thread(new Runnable()
@@ -75,9 +77,9 @@ public class Communicable
         }
     }
     
-    synchronized public void sendMessage(String host, int port, Message msg) throws IOException
+    public void sendMessage(String host, int port, Message msg) throws IOException
     {
-            String address = host+":"+port;
+//            String address = host+":"+port;
 //            Socket s;
 //            if(!connections.containsKey(address))
 //            {
