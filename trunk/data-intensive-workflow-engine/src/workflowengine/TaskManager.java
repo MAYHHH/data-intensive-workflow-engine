@@ -32,6 +32,8 @@ public class TaskManager
     private static final Scheduler sch = new RandomScheduler();
     private static TaskManager tm = null;
     private Properties p = new Properties();
+    private int suspendCount = -1;
+    private int workerCount = -1;
     private Communicable comm = new Communicable()
     {
         @Override
@@ -46,8 +48,10 @@ public class TaskManager
                     updateNodeStatus(msg);
                     break;
                 case Message.TYPE_SUBMIT_WORKFLOW:
-                    System.err.println("Workflow is submitted.");
                     submitWorkflow(msg);
+                    break;
+                case Message.TYPE_SUSPEND_TASK_COMPLETE:
+                    suspendComplete();
                     break;
             }
         }
@@ -81,7 +85,13 @@ public class TaskManager
 
     synchronized public void updateTaskStatus(Message msg)
     {
-        Task.updateTaskStatus(msg.getIntParam("tid"), msg.getIntParam("start"), msg.getIntParam("end"), msg.getIntParam("exit_value"));
+        Task.updateTaskStatus(
+                msg.getIntParam("tid"), 
+                msg.getIntParam("start"), 
+                msg.getIntParam("end"), 
+                msg.getIntParam("exit_value"), 
+                msg.getParam("status").charAt(0)
+        );
         if(msg.getIntParam("end")!=-1)
         {
             if(isRescheduleNeeded())
@@ -116,8 +126,12 @@ public class TaskManager
         Schedule schedule = sch.getSchedule(wf, getExecSite(), fixed);
         
         updateScheduleForWorkflow(wf, schedule);
-        //TODO: when & how to migrate
+        
+        broadcastToWorkers(new Message(Message.TYPE_SUSPEND_TASK));
+        //Will call dispatchTask automatically after all workers suspent 
+        
     }
+    
     
     
     public void submitWorkflow(Message msg)
@@ -173,7 +187,10 @@ public class TaskManager
             msg.setParam("task_name", t.getName());
             msg.setParam("tid", t.getDbid());
             msg.setParam("wfid", t.getWfdbid());
-            
+            if(t.getStatus() == 'S')
+            {
+                msg.setParam("migrate", "migrate");
+            }
             try
             {
                 logger.log("Dispatching task "+t.getName()+" to "+r.get("hostname")+"...");
@@ -194,8 +211,37 @@ public class TaskManager
         for(DBRecord w : workers)
         {
             es.addWorker(Worker.getWorkerFromDB(w.get("hostname")));
-//            es.addWorker(Worker.getWorker(w.get("hostname"), w.getDouble("cpu"), w.getDouble("free_space"), w.getDouble("unit_cost")));
         }
         return es;
+    }
+    
+    public void broadcastToWorkers(Message msg)
+    {
+        List<DBRecord> workers = DBRecord.select("worker", "select hostname from worker");
+        for(DBRecord w : workers)
+        {
+            try
+            {
+                comm.sendMessage(w.get("hostname"), Integer.parseInt(WorkflowEngine.PROP.getProperty("task_executor_port")), msg);
+            }
+            catch (IOException ex)
+            {
+                logger.log("Cannot broadcast message: "+ex.getMessage());
+            }
+        }
+    }
+    
+    public void suspendComplete()
+    {
+        if(suspendCount == -1)
+        {
+            suspendCount = 0;
+            workerCount = DBRecord.select("worker", "select count(hostname) as count from worker").get(0).getInt("count");
+        }
+        suspendCount++;
+        if(suspendCount == workerCount)
+        {
+            dispatchTask();
+        }
     }
 }

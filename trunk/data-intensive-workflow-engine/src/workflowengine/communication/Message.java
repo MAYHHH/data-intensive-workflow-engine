@@ -19,7 +19,8 @@ public class Message implements Serializable
     public static final short TYPE_REGISTER_NODE = 3;
     public static final short TYPE_UPDATE_NODE_STATUS = 4;
     public static final short TYPE_UPDATE_TASK_STATUS = 5;
-    public static final short TYPE_MIGRATE_TASK = 6;
+    public static final short TYPE_SUSPEND_TASK = 6;
+    public static final short TYPE_SUSPEND_TASK_COMPLETE = 9;
     public static final short TYPE_GET_TASK_STATUS = 7;
     public static final short TYPE_SUBMIT_WORKFLOW = 8;
     private int type;
@@ -37,7 +38,8 @@ public class Message implements Serializable
 
     public String getParam(String s)
     {
-        return params.get(s).toString();
+        Object o = params.get(s);
+        return o == null ? null : o.toString();
     }
 
     public Object getObjectParam(String s)
@@ -47,11 +49,13 @@ public class Message implements Serializable
 
     public double getDoubleParam(String s)
     {
-        return Double.parseDouble(params.get(s).toString());
+        Object o = params.get(s);
+        return o == null ? null : Double.parseDouble(o.toString());
     }
     public int getIntParam(String s)
     {
-        return Integer.parseInt(params.get(s).toString());
+        Object o = params.get(s);
+        return o == null ? null : Integer.parseInt(o.toString());
     }
 
     

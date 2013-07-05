@@ -8,7 +8,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.HashMap;
 import java.util.Properties;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.Message;
@@ -30,14 +29,20 @@ public class TaskExecutor
     
     private Properties p = new Properties();
     private short status = STATUS_IDLE;
-//    private String nodeName;
-    private String currentTask;
+    private String currentTaskName;
+    private String currentProcName;
+    private String currentWorkingDir;
     private int currentTaskDbid = -1;
+    private long currentTaskStart;
+    private long currentTaskEnd;
+    private Message currentRequestMsg;
+    private boolean isSuspensed = false;
+    
     private String managerHost;
     private int managerPort;
     private double cpu = -1;
-    private HashMap<String, Long> startTime = new HashMap<>();
-    private HashMap<String, Long> endTime = new HashMap<>();
+//    private HashMap<String, Long> startTime = new HashMap<>();
+//    private HashMap<String, Long> endTime = new HashMap<>();
     private Communicable comm = new Communicable(){
         @Override
         public void handleMessage(Message msg)
@@ -48,13 +53,10 @@ public class TaskExecutor
                     exec(msg);
                     break;
                 case Message.TYPE_GET_NODE_STATUS:
-                    try
-                    {
-                        updateNodeStatus();
-                    }
-                    catch (IOException ex) {}
+                    updateNodeStatus();
                     break;
-                case Message.TYPE_MIGRATE_TASK:
+                case Message.TYPE_SUSPEND_TASK:
+                    suspendCurrentTask();
                     break;
             }
         }
@@ -93,14 +95,13 @@ public class TaskExecutor
                         Thread.sleep(5000);
                     }
                     catch (InterruptedException ex) {}
-                    catch (IOException ex) {}
                 }
             }
         });
         heartBeat.start();
     }
    
-    public void updateNodeStatus() throws IOException
+    public void updateNodeStatus()
     {
         Message response = new Message(Message.TYPE_UPDATE_NODE_STATUS);
 //        response.setParam("name", nodeName);
@@ -110,7 +111,11 @@ public class TaskExecutor
         response.setParam("current_tid", currentTaskDbid);
         response.setParam("free_memory", getFreeMemory());
         response.setParam("cpu", getCPU());
-        comm.sendMessage(managerHost, managerPort, response);
+        try
+        {
+            comm.sendMessage(managerHost, managerPort, response);
+        }
+        catch (IOException ex){}
     }
     
     public double getFreeMemory()
@@ -148,75 +153,107 @@ public class TaskExecutor
         return cpu;
     }
     
+    private String[] prepareCmd(Message msg)
+    {
+        String cmdPrefix = WorkflowEngine.PROP.getProperty("command_prefix");
+        StringBuilder cmd = new StringBuilder();
+        cmd.append(cmdPrefix).append(msg.getParam("cmd"));
+        if(msg.getParam("migrate") != null)
+        {
+            cmd.append(";-_condor_restart;").append(currentTaskName).append(".ckpt");
+        }
+        return (cmd.toString()).split(";");
+    }
+    
+    private void setIdle()
+    {
+        currentTaskName = "";
+        currentTaskDbid = -1;
+        currentProcName = "";
+        currentWorkingDir = "";
+        status = STATUS_IDLE;
+        currentTaskStart = -1;
+        currentTaskEnd = -1;
+        currentRequestMsg = null;
+    }
+    
     synchronized public void exec(Message msg)
     {
         if(status == STATUS_BUSY)
         {
             return;
         }
-        long start = 0;
         try
         {
-            currentTask = msg.getParam("task_name");
-            logger.log("Starting execution of task "+currentTask+".");
+            isSuspensed = false;
+            currentRequestMsg = msg;
+            currentTaskName = msg.getParam("task_name");
+            logger.log("Starting execution of task "+currentTaskName+".");
             status = STATUS_BUSY;
-            String cmdPrefix = WorkflowEngine.PROP.getProperty("command_prefix");
-            String cmdSuffix = WorkflowEngine.PROP.getProperty("command_suffix");
-            String[] cmd = (cmdPrefix+msg.getParam("cmd")+cmdSuffix).split(";");
+            String[] cmds = prepareCmd(msg);
+            currentProcName = cmds[0];
             currentTaskDbid = msg.getIntParam("tid");
-            start = Utils.time();
-            startTime.put(currentTask, start);
             
-//            System.err.println("Start executing "+currentTask+" ...");
-            ProcessBuilder pb = new ProcessBuilder(cmd).directory(new File(
-                    WorkflowEngine.PROP.getProperty("working_dir") +
-                    msg.getParam("wfid")
+//            startTime.put(currentTask, start);
+            currentWorkingDir = WorkflowEngine.PROP.getProperty("working_dir")+msg.getParam("wfid")+"/";
+            
+            ProcessBuilder pb = new ProcessBuilder(cmds).directory(new File(
+                    currentWorkingDir + msg.getParam("wfid")
                     ));
+            pb.redirectError(new File(currentWorkingDir+currentTaskName+".err"));
+            pb.redirectOutput(new File(currentWorkingDir+currentTaskName+".out"));
+            
+            currentTaskStart = Utils.time();
             Process proc = pb.start();
             
-//            Process proc = Runtime.getRuntime().exec(cmd);
-            
+            //Send task status to manager that the task is started
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
-            response.setParam("task_name", msg.getParam("task_name"));
-            response.setParam("tid", msg.getParam("tid"));
+            response.setParam("task_name", currentTaskName);
+            response.setParam("tid", currentTaskDbid);
             response.setParam("wfid", msg.getParam("wfid"));
-//            response.setParam("wfid", msg.getParam("wfid"));
-            response.setParam("start", start);
+            response.setParam("status", "E");
+            response.setParam("start", currentTaskStart);
             response.setParam("end", -1);
             response.setParam("exit_value", -1);
             comm.sendMessage(managerHost, managerPort, response);
             
+            //Wait for the process to complete
             int exitVal = proc.waitFor();
-            long end = Utils.time();
-            endTime.put(currentTask, end);
-            currentTask = "";
-            currentTaskDbid = -1;
-            status = STATUS_IDLE;
-            response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
-            response.setParam("task_name", msg.getParam("task_name"));
-            response.setParam("tid", msg.getParam("tid"));
-            response.setParam("wfid", msg.getParam("wfid"));
-//            response.setParam("wfid", msg.getParam("wfid"));
-            response.setParam("start", start);
-            response.setParam("end", end);
-            response.setParam("exit_value", exitVal);
-            logger.log("Execution of task "+currentTask+" is finished.");
             
-//            System.err.println("Finish executing "+msg.getParam("task_name")+".");
+            currentTaskEnd = Utils.time();
+            setIdle();
+            if(isSuspensed)
+            {
+                return;
+            }
+            
+            //Send task status to manager that the task is finished
+            response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
+            response.setParam("task_name", currentTaskName);
+            response.setParam("tid", currentTaskDbid);
+            response.setParam("wfid", msg.getParam("wfid"));
+            response.setParam("status", "C");
+            response.setParam("start", currentTaskStart);
+            response.setParam("end", currentTaskEnd);
+            response.setParam("exit_value", exitVal);
+            logger.log("Execution of task "+currentTaskName+" is finished.");
+            
             updateNodeStatus();
             comm.sendMessage(managerHost, managerPort, response);
             
         }
-        catch (Exception ex) 
+        catch (IOException | InterruptedException ex) 
         {
-            long end = Utils.time();
-            logger.log("Exception while "+currentTask+" is executing: "+ex.getMessage());
+            currentTaskEnd = Utils.time();
+            logger.log("Exception while "+currentTaskName+" is executing: "+ex.getMessage());
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
-            response.setParam("task_name", msg.getParam("task_name"));
-            response.setParam("tid", msg.getParam("tid"));
-            response.setParam("start", start);
-            response.setParam("end", end);
-            response.setParam("exit_value", 100);
+            response.setParam("task_name", currentTaskName);
+            response.setParam("tid", currentTaskDbid);
+            response.setParam("wfid", msg.getParam("wfid"));
+            response.setParam("status", "F");
+            response.setParam("start", currentTaskStart);
+            response.setParam("end", currentTaskEnd);
+            response.setParam("exit_value", -1);
             try
             {
                 comm.sendMessage(managerHost, managerPort, response);
@@ -227,12 +264,40 @@ public class TaskExecutor
             }
         }
     }
-    synchronized public void migrate(String targetHost)
+    
+    synchronized public void suspendCurrentTask()
     {
-        
+        if(currentTaskName.length() == 0)
+        {
+            return;
+        }
+        try
+        {
+            
+            Runtime.getRuntime().exec(new String[]{
+                "/bin/bash", "-c", "killall -s SIGTSTP "+currentProcName
+            }).waitFor();
+            isSuspensed = true;
+            Runtime.getRuntime().exec(new String[]{
+                "/bin/bash", "-c", "mv "+currentWorkingDir+currentProcName+".ckpt "+
+                    currentWorkingDir+currentTaskName+".ckpt"
+            }).waitFor();
+            
+            Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
+            response.setParam("task_name", currentTaskName);
+            response.setParam("tid", currentTaskDbid);
+            response.setParam("wfid", currentRequestMsg.getParam("wfid"));
+            response.setParam("status", "S");
+            response.setParam("start", currentTaskStart);
+            response.setParam("end", currentTaskEnd);
+            response.setParam("exit_value", -1);
+            comm.sendMessage(managerHost, managerPort, response);
+            comm.sendMessage(managerHost, managerPort, new Message(Message.TYPE_SUSPEND_TASK_COMPLETE));
+        }
+        catch (IOException | InterruptedException ex)
+        {
+            logger.log("Cannot suspend process: "+ ex.getMessage());
+        }
     }
-    synchronized public void receiveMigratedTask()
-    {
-        
-    }
+    
 }
