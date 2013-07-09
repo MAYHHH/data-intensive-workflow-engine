@@ -232,7 +232,7 @@ public class Task
     @Override
     public String toString()
     {
-        return workflowName +"(" + wfdbid + ")" + ":" + name;
+        return name;
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 import workflowengine.communication.Communicable;
+import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
 import workflowengine.utils.DBRecord;
 import workflowengine.resource.ExecSite;
@@ -31,6 +32,7 @@ public class TaskManager
     public static final Logger logger = new Logger("task-manager.log");
     private static final Scheduler sch = new RandomScheduler();
     private static TaskManager tm = null;
+    private HostAddress addr;
     private Properties p = new Properties();
     private int suspendCount = -1;
     private int workerCount = -1;
@@ -59,7 +61,9 @@ public class TaskManager
     
     private TaskManager()
     {
-        comm.startServer(Integer.parseInt(WorkflowEngine.PROP.getProperty("task_manager_port")));
+        addr = new HostAddress(WorkflowEngine.PROP, "task_manager_host", "task_manager_port");
+        comm.setLocalPort(addr.getPort());
+        comm.startServer();
     }
     
     public static TaskManager start()
@@ -74,12 +78,16 @@ public class TaskManager
 
     synchronized public void updateNodeStatus(Message msg)
     {
+        HostAddress workerAddr = (HostAddress)msg.getObjectParam("address");
+        HostAddress espAddr = (HostAddress)msg.getObjectParam("esp_address");
         Worker.updateWorkerStatus(
-                msg.getParam("FROM"), 
+                espAddr,
+                workerAddr, 
                 msg.getIntParam("current_tid"), 
                 msg.getDoubleParam("free_memory"), 
                 msg.getDoubleParam("free_space"),
-                msg.getDoubleParam("cpu")
+                msg.getDoubleParam("cpu"),
+                msg.getParam("uuid")
         );
     }
 
@@ -113,14 +121,15 @@ public class TaskManager
         //TODO: implement this
         Workflow wf = Workflow.open(WorkflowEngine.PROP.getProperty("working_dir")+wfid+"/"+wfid+".wfobj");
         List<DBRecord> res = DBRecord.select(
-                "SELECT s.* "
+                "SELECT s.tid, w.uuid "
                 + "FROM workflow_task t JOIN schedule s ON t.tid = s.tid "
+                + "JOIN worker w on w.wkid = s.wkid "
                 + "WHERE status = 'C' AND t.wfid='"+wfid+"'");
         HashMap<Task, Worker> fixed = new HashMap<>(res.size());
         for(DBRecord r : res)
         {
             Task t = Task.getWorkflowTaskFromDB(r.getInt("tid"));
-            Worker w = Worker.getWorkerFromDB(r.getInt("wkid"));
+            Worker w = Worker.getWorkerFromDB(r.get("uuid"));
             fixed.put(t, w);
         }
         Schedule schedule = sch.getSchedule(wf, getExecSite(), fixed);
@@ -168,14 +177,6 @@ public class TaskManager
         }
     }
 
-    public Worker getWorkerForTask(Task t) throws DBException
-    {
-        String hostname = DBRecord.select(null, "SELECT wk.name FROM"
-                + "schedule s JOIN worker wk ON s.wkid = wk.wkid"
-                + "WHERE wk.name='" + t.getName() + "'").get(0).get("name");
-        return Worker.getWorker(hostname, 0, 0, 0);
-    }
-
     public void dispatchTask()
     {
         List<DBRecord> results = DBRecord.select("_task_to_dispatch", new DBRecord());
@@ -187,14 +188,15 @@ public class TaskManager
             msg.setParam("task_name", t.getName());
             msg.setParam("tid", t.getDbid());
             msg.setParam("wfid", t.getWfdbid());
+            msg.setParam("uuid", r.get("uuid"));
             if(t.getStatus() == 'S')
             {
                 msg.setParam("migrate", "migrate");
             }
             try
             {
-                logger.log("Dispatching task "+t.getName()+" to "+r.get("hostname")+"...");
-                comm.sendMessage(r.get("hostname"), Integer.parseInt(WorkflowEngine.PROP.getProperty("task_executor_port")), msg);
+                logger.log("Dispatching task "+t.getName()+" to "+r.get("uuid")+"...");
+                comm.sendMessage(r.get("esp_hostname"), r.getInt("esp_port"), msg);
             }
             catch (IOException ex)
             {
@@ -206,17 +208,18 @@ public class TaskManager
 
     public ExecSite getExecSite() throws DBException
     {
-        List<DBRecord> workers = DBRecord.select("worker", "select hostname from worker");
+        List<DBRecord> workers = DBRecord.select("worker", "select uuid from worker");
         ExecSite es = new ExecSite();
         for(DBRecord w : workers)
         {
-            es.addWorker(Worker.getWorkerFromDB(w.get("hostname")));
+            es.addWorker(Worker.getWorkerFromDB(w.get("uuid")));
         }
         return es;
     }
     
     public void broadcastToWorkers(Message msg)
     {
+        //TODO: fix this
         List<DBRecord> workers = DBRecord.select("worker", "select hostname from worker");
         for(DBRecord w : workers)
         {

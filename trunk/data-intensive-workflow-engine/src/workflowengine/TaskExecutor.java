@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Properties;
 import workflowengine.communication.Communicable;
+import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
 import workflowengine.utils.Logger;
 import workflowengine.utils.Utils;
@@ -23,6 +24,7 @@ public class TaskExecutor
 {
     public static final short STATUS_IDLE = 1;
     public static final short STATUS_BUSY = 2;
+    private static final int HEARTBEAT_INTERVAL = 10000; //10 seconds
     private static Logger logger = new Logger("task-executor.log");
     
     private static TaskExecutor te = null;
@@ -37,13 +39,13 @@ public class TaskExecutor
     private long currentTaskEnd;
     private Message currentRequestMsg;
     private boolean isSuspensed = false;
+    private String uuid;
     
-    private String managerHost;
-    private int managerPort;
+    private HostAddress espAddr;
+    private int port;
     private double cpu = -1;
-//    private HashMap<String, Long> startTime = new HashMap<>();
-//    private HashMap<String, Long> endTime = new HashMap<>();
     private Communicable comm = new Communicable(){
+
         @Override
         public void handleMessage(Message msg)
         {
@@ -64,9 +66,12 @@ public class TaskExecutor
     
     private TaskExecutor()
     {
-        managerHost = WorkflowEngine.PROP.getProperty("task_manager_host");
-        managerPort = Integer.parseInt(WorkflowEngine.PROP.getProperty("task_manager_port"));
-        comm.startServer(Integer.parseInt(WorkflowEngine.PROP.getProperty("task_executor_port")));
+        espAddr = new HostAddress(WorkflowEngine.PROP, "exec_site_proxy_host", "exec_site_proxy_port");
+        port = (Integer.parseInt(WorkflowEngine.PROP.getProperty("task_executor_port")));
+        uuid = Utils.uuid();
+        comm.setLocalPort(port);
+        comm.setTemplateMsgParam("uuid", uuid);
+        comm.startServer();
         startHeartBeat();
     }
     
@@ -92,7 +97,7 @@ public class TaskExecutor
                     try
                     {
                         updateNodeStatus();
-                        Thread.sleep(5000);
+                        Thread.sleep(HEARTBEAT_INTERVAL);
                     }
                     catch (InterruptedException ex) {}
                 }
@@ -104,16 +109,16 @@ public class TaskExecutor
     public void updateNodeStatus()
     {
         Message response = new Message(Message.TYPE_UPDATE_NODE_STATUS);
-//        response.setParam("name", nodeName);
         response.setParam("status", status);
         File defaultStorage = new File(WorkflowEngine.PROP.getProperty("working_dir"));
         response.setParam("free_space", defaultStorage.getFreeSpace()); //in bytes
         response.setParam("current_tid", currentTaskDbid);
         response.setParam("free_memory", getFreeMemory());
         response.setParam("cpu", getCPU());
+        response.setParam("port", this.port);
         try
         {
-            comm.sendMessage(managerHost, managerPort, response);
+            comm.sendMessage(espAddr, response);
         }
         catch (IOException ex){}
     }
@@ -193,15 +198,13 @@ public class TaskExecutor
             String[] cmds = prepareCmd(msg);
             currentProcName = cmds[0];
             currentTaskDbid = msg.getIntParam("tid");
-            
-//            startTime.put(currentTask, start);
             currentWorkingDir = WorkflowEngine.PROP.getProperty("working_dir")+msg.getParam("wfid")+"/";
             
             ProcessBuilder pb = new ProcessBuilder(cmds).directory(new File(
-                    currentWorkingDir + msg.getParam("wfid")
+                    currentWorkingDir
                     ));
-            pb.redirectError(new File(currentWorkingDir+currentTaskName+".err"));
-            pb.redirectOutput(new File(currentWorkingDir+currentTaskName+".out"));
+            pb.redirectError(new File(currentWorkingDir+currentTaskName+".stderr"));
+            pb.redirectOutput(new File(currentWorkingDir+currentTaskName+".stdout"));
             
             currentTaskStart = Utils.time();
             Process proc = pb.start();
@@ -215,15 +218,16 @@ public class TaskExecutor
             response.setParam("start", currentTaskStart);
             response.setParam("end", -1);
             response.setParam("exit_value", -1);
-            comm.sendMessage(managerHost, managerPort, response);
+            comm.sendMessage(espAddr, response);
             
             //Wait for the process to complete
             int exitVal = proc.waitFor();
             
             currentTaskEnd = Utils.time();
-            setIdle();
+            
             if(isSuspensed)
             {
+                setIdle();
                 return;
             }
             
@@ -238,8 +242,9 @@ public class TaskExecutor
             response.setParam("exit_value", exitVal);
             logger.log("Execution of task "+currentTaskName+" is finished.");
             
+            setIdle();
             updateNodeStatus();
-            comm.sendMessage(managerHost, managerPort, response);
+            comm.sendMessage(espAddr, response);
             
         }
         catch (IOException | InterruptedException ex) 
@@ -256,11 +261,11 @@ public class TaskExecutor
             response.setParam("exit_value", -1);
             try
             {
-                comm.sendMessage(managerHost, managerPort, response);
+                comm.sendMessage(espAddr, response);
             }
             catch (IOException ex1)
             {
-                logger.log("Cannot send message to "+managerHost+".");
+                logger.log("Cannot send message to "+espAddr+".");
             }
         }
     }
@@ -291,8 +296,8 @@ public class TaskExecutor
             response.setParam("start", currentTaskStart);
             response.setParam("end", currentTaskEnd);
             response.setParam("exit_value", -1);
-            comm.sendMessage(managerHost, managerPort, response);
-            comm.sendMessage(managerHost, managerPort, new Message(Message.TYPE_SUSPEND_TASK_COMPLETE));
+            comm.sendMessage(espAddr, response);
+            comm.sendMessage(espAddr, new Message(Message.TYPE_SUSPEND_TASK_COMPLETE));
         }
         catch (IOException | InterruptedException ex)
         {
