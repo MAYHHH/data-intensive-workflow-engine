@@ -316,7 +316,7 @@ public class Workflow implements Serializable
             try{
             Process p = Runtime.getRuntime().exec(new String[]
             {
-                "/bin/bash", "-c", "dd if=/dev/zero of="+outfile+" bs=8k count="+(int)Math.round(r.getDouble("estsize")/8192)+" 2>&1 >/dev/null"
+                "/bin/bash", "-c", "dd if=/dev/zero of="+outfile+" bs=8k count="+(int)Math.round(r.getDouble("estsize")/8192/1024)+" 2>&1 >/dev/null"
             });
             p.waitFor();
             }
@@ -357,29 +357,5 @@ public class Workflow implements Serializable
             TaskManager.logger.log("Cannot read the workflow object: "+ex.getMessage());
         }
         return null;
-    }
-    
-    
-
-    public static void main(String[] args)
-    {
-        try{
-        PROP.setProperty("DBHost", "10.217.165.63");
-        PROP.setProperty("DBPort", "6612");
-        PROP.setProperty("DBName", "workflow_engine");
-        PROP.setProperty("DBUser", "root");
-        PROP.setProperty("DBPass", "1234");
-        
-        Workflow wf = Workflow.fromDAX("../ExampleDAGs/Simple_5.xml");
-        wf.print();
-        ExecSite nw = ExecSite.random(2);
-        Schedule s = new Schedule(wf, nw);
-        s.random();
-        s.getMakespan();
-        s.print();
-        }catch(DBException ex)
-        {
-            System.err.println(ex.getMessage());
-        }
     }
 }

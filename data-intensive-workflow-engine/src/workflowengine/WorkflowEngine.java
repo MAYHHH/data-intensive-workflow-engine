@@ -40,7 +40,7 @@ public class WorkflowEngine
     {
         if(args.length == 0)
         {
-            System.err.println("Please specify server type (TaskExecutor, TaskManager).");
+            System.err.println("Please specify server type (TaskExecutor, TaskManager, ExecutionSiteProxy).");
             System.exit(1);
         }
         WorkflowEngine we = new WorkflowEngine();
@@ -56,6 +56,11 @@ public class WorkflowEngine
                 System.err.println("Starting task manager ...");
                 TaskManager taskManager = TaskManager.start();
                 System.err.println("Task manager started.");
+                break;
+            case "ExecutionSiteProxy":
+                System.err.println("Starting execution site proxy ...");
+                ExecutionSiteProxy esp = ExecutionSiteProxy.start();
+                System.err.println("Execution site proxy started.");
                 break;
         }
     }

@@ -7,7 +7,6 @@ package workflowengine.resource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import workflowengine.workflow.WorkflowFile;
-import workflowengine.utils.Utils;
 
 /**
  *
@@ -51,25 +50,25 @@ public class ExecSite
     {
         return servers.size();
     }
-    public static ExecSite random(int count)
-    {
-        ExecSite n = new ExecSite();
-        n.setStorageLinkSpeed((7+Math.random()*3)*Utils.GB);
-        Worker[] servers = new Worker[count];
-        for(int i=0;i<count;i++)
-        {
-            servers[i] = Worker.getWorker("Server-"+(i+1), 100+Math.random()*50, 100*Utils.GB+Math.random()*50*Utils.GB, 10+Math.random()*3);
-            n.addWorker(servers[i]);
-        }
-        /*for(int i=0;i<count;i++)
-        {
-            for(int j=i+1;j<count;j++)
-            {
-                n.addLink(servers[i], servers[j], 0.8*Utils.GB+0.2*Utils.GB*Math.random());
-            }
-        }*/
-        return n;
-    }
+//    public static ExecSite random(int count)
+//    {
+//        ExecSite n = new ExecSite();
+//        n.setStorageLinkSpeed((7+Math.random()*3)*Utils.GB);
+//        Worker[] servers = new Worker[count];
+//        for(int i=0;i<count;i++)
+//        {
+//            servers[i] = Worker.getWorker("Server-"+(i+1), 100+Math.random()*50, 100*Utils.GB+Math.random()*50*Utils.GB, 10+Math.random()*3);
+//            n.addWorker(servers[i]);
+//        }
+//        /*for(int i=0;i<count;i++)
+//        {
+//            for(int j=i+1;j<count;j++)
+//            {
+//                n.addLink(servers[i], servers[j], 0.8*Utils.GB+0.2*Utils.GB*Math.random());
+//            }
+//        }*/
+//        return n;
+//    }
     
     public Worker getWorker(int i)
     {

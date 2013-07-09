@@ -11,16 +11,15 @@ package workflowengine.communication;
 import java.io.*;
 import java.net.*;
 import java.util.HashMap;
-import java.util.Random;
-import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Communicable
 {
     private HashMap<String, Socket> connections = new HashMap<>();
-    private static Random r = new Random();
-    public void startServer(final int port)
+    private int localPort = 0;
+    private Message templateMsg = new Message(-1);
+    public void startServer()
     {
         Thread serverThread = new Thread(new Runnable()
         {
@@ -29,7 +28,7 @@ public class Communicable
             {
                 try
                 {
-                    ServerSocket server = new ServerSocket(port);
+                    ServerSocket server = new ServerSocket(localPort);
                     while (true)
                     {
                         Socket socket = server.accept();
@@ -79,21 +78,28 @@ public class Communicable
     
     public void sendMessage(String host, int port, Message msg) throws IOException
     {
-//            String address = host+":"+port;
-//            Socket s;
-//            if(!connections.containsKey(address))
-//            {
-//                s = new Socket(host, port);
-//                connections.put(address, s);
-//            }
-//            else
-//            {
-//                s = connections.get(address);
-//            }
-            Socket s = new Socket(host, port);
-            ObjectOutputStream os = new ObjectOutputStream(s.getOutputStream());
-            os.writeObject(msg);
-            os.flush();
-            s.close();
+        msg.addParamFromMsg(templateMsg);
+        Socket s = new Socket(host, port);
+        ObjectOutputStream os = new ObjectOutputStream(s.getOutputStream());
+        os.writeObject(msg);
+        os.flush();
+        s.close();
     }
+    
+    public void sendMessage(HostAddress addr, Message msg) throws IOException
+    {
+        sendMessage(addr.getHost(), addr.getPort(), msg);
+    }
+
+    public void setLocalPort(int localPort)
+    {
+        this.localPort = localPort;
+    }
+
+    public void setTemplateMsgParam(String key, Object val)
+    {
+        this.templateMsg.setParam(key, val);
+    }
+    
+    
 }

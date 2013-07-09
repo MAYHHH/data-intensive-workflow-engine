@@ -64,6 +64,16 @@ public class Message implements Serializable
         params.put(s, o);
     }
     
+    public boolean hasParam(String s)
+    {
+        return params.containsKey(s);
+    }
+    
+    public void addParamFromMsg(Message msg)
+    {
+        this.params.putAll(msg.params);
+    }
+    
     @Override
     public String toString()
     {
