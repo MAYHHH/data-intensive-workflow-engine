@@ -20,7 +20,12 @@ public class WorkflowEngine
     
     private static final String CONFIG_FILE = "default.properties";
   
-    public void init()
+    static 
+    {
+        init();
+    }
+    
+    public static void init()
     {
         try
         {
