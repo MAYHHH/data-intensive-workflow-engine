@@ -16,6 +16,7 @@ import workflowengine.workflow.Workflow;
  */
 public interface Scheduler
 {
-    public Schedule getSchedule(Workflow wf, ExecSite nw);
-    public Schedule getSchedule(Workflow wf, ExecSite nw, HashMap<Task, Worker> fixedMapping);
+//    public Schedule getSchedule(Workflow wf, ExecSite nw);
+//    public Schedule getSchedule(Workflow wf, ExecSite nw, HashMap<Task, Worker> fixedMapping);
+    public Schedule getSchedule(SchedulerSettings settings);
 }
