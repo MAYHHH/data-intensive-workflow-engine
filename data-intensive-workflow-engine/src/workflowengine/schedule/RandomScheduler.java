@@ -4,32 +4,17 @@
  */
 package workflowengine.schedule;
 
-import java.util.HashMap;
-import workflowengine.resource.ExecSite;
-import workflowengine.resource.Worker;
-import workflowengine.workflow.Task;
-import workflowengine.workflow.Workflow;
-
 /**
  *
  * @author udomo
  */
 public class RandomScheduler implements Scheduler
-{
+{    
     @Override
-    public Schedule getSchedule(Workflow wf, ExecSite es)
+    public Schedule getSchedule(SchedulerSettings settings)
     {
-        return getSchedule(wf, es, null);
-    }
-
-    @Override
-    public Schedule getSchedule(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
-    {
-        Schedule s = new Schedule(new SchedulerSettings(wf, es, fixedMapping));
+        Schedule s = new Schedule(settings);
         s.random();
         return s;
     }
-    
-    
-    
 }
