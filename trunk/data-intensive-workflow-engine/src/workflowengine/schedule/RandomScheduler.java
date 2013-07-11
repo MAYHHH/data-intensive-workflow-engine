@@ -25,7 +25,7 @@ public class RandomScheduler implements Scheduler
     @Override
     public Schedule getSchedule(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
     {
-        Schedule s = new Schedule(wf, es, fixedMapping);
+        Schedule s = new Schedule(new SchedulerSettings(wf, es, fixedMapping));
         s.random();
         return s;
     }
