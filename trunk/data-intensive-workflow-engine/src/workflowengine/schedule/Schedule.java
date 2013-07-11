@@ -16,7 +16,7 @@ import workflowengine.workflow.Task;
  */
 public class Schedule
 {
-    private Random r = new Random();
+    private Random r;
     private final Workflow wf;
     private final ExecSite es;
     private final List<Task> taskList;
@@ -34,6 +34,7 @@ public class Schedule
     //Fixed mapping for finished tasks
     public Schedule(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
     {
+        r = new Random();
         this.wf = wf;
         this.es = es;
         mapping = new HashMap<>(wf.getTotalTasks());
@@ -45,26 +46,25 @@ public class Schedule
             mapping.putAll(fixedMapping);
             this.fixedMapping.putAll(fixedMapping);
         }
-        mapAll();
+        mapAllTaskToFirstWorker();
         edited = true;
     }
 
     //Copy constructor
     public Schedule(Schedule sch)
     {
+        this.r = sch.r;
         this.wf = sch.wf;
         this.es = sch.es;
-        mapping = new HashMap<>(wf.getTotalTasks());
-        this.mapping.putAll(sch.mapping);
+        mapping = new HashMap<>(sch.mapping);
         this.makespan = sch.makespan;
         this.edited = sch.edited;
-        this.fixedMapping = new HashMap<>();
-        this.fixedMapping.putAll(sch.fixedMapping);
-        taskList = new ArrayList<>(sch.taskList);
+        this.fixedMapping = sch.fixedMapping;
+        taskList = sch.taskList;
     }
     
     //Map all tasks to the first worker
-    private void mapAll()
+    private void mapAllTaskToFirstWorker()
     {
         Worker w = es.getWorker(0);
         for(int i=0;i<taskList.size();i++)
@@ -105,6 +105,10 @@ public class Schedule
             mapping.put(t, s);
             edited = true;
         }
+    }
+    public void setWorkerForTask(int taskID, int workerID)
+    {
+        setWorkerForTask(taskList.get(taskID), es.getWorker(workerID));
     }
 
     public double getMakespan()
