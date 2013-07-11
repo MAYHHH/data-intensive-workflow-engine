@@ -16,58 +16,78 @@ import workflowengine.workflow.Task;
  */
 public class Schedule
 {
-    private Random r;
-    private final Workflow wf;
-    private final ExecSite es;
-    private final List<Task> taskList;
-    private final HashMap<Task, Worker> fixedMapping; //For finished tasks
+    private final SchedulerSettings settings;
+//    private Random r;
+//    private final Workflow wf;
+//    private final ExecSite es;
+//    private final List<Task> taskList;
+//    private final HashMap<Task, Worker> fixedMapping; //For finished tasks
     private HashMap<Task, Worker> mapping;
     private double makespan;
     private double cost;
     private boolean edited;
 
-    public Schedule(Workflow wf, ExecSite es)
+    public Schedule(SchedulerSettings settings)
     {
-        this(wf, es, null);
-    }
-    
-    //Fixed mapping for finished tasks
-    public Schedule(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
-    {
-        r = new Random();
-        this.wf = wf;
-        this.es = es;
-        mapping = new HashMap<>(wf.getTotalTasks());
-        taskList = wf.getTaskList();
-        this.fixedMapping = new HashMap<>();
-        if(fixedMapping != null)
-        {
-            taskList.removeAll(fixedMapping.keySet());
-            mapping.putAll(fixedMapping);
-            this.fixedMapping.putAll(fixedMapping);
-        }
+        this.settings = settings;
+        mapping = new HashMap<>(settings.getTotalTasks());
+        mapping.putAll(settings.getFixedMapping());
         mapAllTaskToFirstWorker();
         edited = true;
     }
 
+//    
+//    
+//    public Schedule(Workflow wf, ExecSite es)
+//    {
+//        this(wf, es, null);
+//    }
+//    
+//    //Fixed mapping for finished tasks
+//    public Schedule(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
+//    {
+//        r = new Random();
+//        this.wf = wf;
+//        this.es = es;
+//        mapping = new HashMap<>(wf.getTotalTasks());
+//        taskList = wf.getTaskList();
+//        this.fixedMapping = new HashMap<>();
+//        if(fixedMapping != null)
+//        {
+//            taskList.removeAll(fixedMapping.keySet());
+//            mapping.putAll(fixedMapping);
+//            this.fixedMapping.putAll(fixedMapping);
+//        }
+//        mapAllTaskToFirstWorker();
+//        edited = true;
+//    }
+
     //Copy constructor
-    public Schedule(Schedule sch)
+    private Schedule(Schedule sch)
     {
-        this.r = sch.r;
-        this.wf = sch.wf;
-        this.es = sch.es;
+//        this.r = sch.r;
+//        this.wf = sch.wf;
+//        this.es = sch.es;
         mapping = new HashMap<>(sch.mapping);
         this.makespan = sch.makespan;
+        this.cost = sch.cost;
         this.edited = sch.edited;
-        this.fixedMapping = sch.fixedMapping;
-        taskList = sch.taskList;
+        this.settings = sch.settings;
+//        this.fixedMapping = sch.fixedMapping;
+//        taskList = sch.taskList;
     }
+    
+    public Schedule copy()
+    {
+        return new Schedule(this);
+    }
+    
     
     //Map all tasks to the first worker
     private void mapAllTaskToFirstWorker()
     {
-        Worker w = es.getWorker(0);
-        for(int i=0;i<taskList.size();i++)
+        Worker w = settings.getWorker(0);
+        for(int i=0;i<settings.getTotalTasks();i++)
         {
             setWorkerForTask(i, w);
         }
@@ -76,17 +96,17 @@ public class Schedule
     
     public void random()
     {
-        for(int i=0;i<taskList.size();i++)
+        for(int i=0;i<settings.getTotalTasks();i++)
         {
-            setWorkerForTask(i, es.getWorker(r.nextInt(es.getTotalWorkers())));
+            setWorkerForTask(i, settings.getRandomWorker());
         }
         this.edited = true;
     }
 
     
-    public Worker getWorkerForTask(int taskID)
+    public Worker getWorkerForTask(int taskIndex)
     {
-        return mapping.get(taskList.get(taskID));
+        return mapping.get(settings.getTask(taskIndex));
     }
     
     public Worker getWorkerForTask(Task t)
@@ -94,21 +114,21 @@ public class Schedule
         return mapping.get(t);
     }
 
-    public void setWorkerForTask(int taskID, Worker s)
+    public void setWorkerForTask(int taskIndex, Worker s)
     {
-        setWorkerForTask(taskList.get(taskID), s);
+        setWorkerForTask(settings.getTask(taskIndex), s);
     }
     public void setWorkerForTask(Task t, Worker s)
     {
-        if(!fixedMapping.containsKey(t))
+        if(!settings.isFixedMapping(t))
         {
             mapping.put(t, s);
             edited = true;
         }
     }
-    public void setWorkerForTask(int taskID, int workerID)
+    public void setWorkerForTask(int taskIndex, int workerIndex)
     {
-        setWorkerForTask(taskList.get(taskID), es.getWorker(workerID));
+        setWorkerForTask(settings.getTask(taskIndex), settings.getWorker(workerIndex));
     }
 
     public double getMakespan()
@@ -141,21 +161,21 @@ public class Schedule
     {
         LinkedList<Task> finishedTasks = new LinkedList<>();
         LinkedList<Task> pendingTasks = new LinkedList<>();
-        Task start = wf.getStartTask();
+        Task start = settings.getStartTask();
         
-        for(Task t : fixedMapping.keySet())
+        for(Task t : settings.getFixedTasks())
         {
             t.setProp("finishTime", 0.0);
         }
         
-        finishedTasks.addAll(fixedMapping.keySet());
+        finishedTasks.addAll(settings.getFixedTasks());
         pendingTasks.push(start);
         
-        for(int i=0;i<es.getTotalWorkers();i++)
+        for(int i=0;i<settings.getTotalWorkers();i++)
         {
-            es.getWorker(i).setProp("readyTime", 0.0);
+            settings.getWorker(i).setProp("readyTime", 0.0);
         }
-        
+        Workflow wf = settings.getWf();
         while(!pendingTasks.isEmpty())
         {
             Task t = pendingTasks.pop();
