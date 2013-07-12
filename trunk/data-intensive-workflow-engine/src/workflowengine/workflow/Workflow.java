@@ -29,10 +29,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import workflowengine.TaskManager;
-import workflowengine.WorkflowEngine;
-import static workflowengine.WorkflowEngine.PROP;
-import workflowengine.resource.ExecSite;
-import workflowengine.schedule.Schedule;
 import workflowengine.utils.DBException;
 import workflowengine.utils.DBRecord;
 import workflowengine.utils.Utils;
@@ -50,8 +46,8 @@ public class Workflow implements Serializable
     private ArrayList<Task> tasks = new ArrayList<>();
     private DirectedSparseGraph<Task, String> graph = new DirectedSparseGraph<>();
     private String name = "";
-//    private HashMap<String, WorkflowFile> inputFiles = new HashMap<>();
-//    private HashMap<String, WorkflowFile> outputFiles = new HashMap<>();
+    private LinkedList<WorkflowFile> inputFiles = new LinkedList<>();
+    private LinkedList<WorkflowFile> outputFiles = new LinkedList<>();
 
     public Workflow(String name) throws DBException
     {
@@ -61,12 +57,12 @@ public class Workflow implements Serializable
     
     public void prepareWorkingDirectory()
     {
-        new File(WorkflowEngine.PROP.getProperty("working_dir")+dbid).mkdir();
+        new File(Utils.getProp("working_dir")+dbid).mkdir();
         try
         {
             Runtime.getRuntime().exec(new String[]{
-                "/bin/bash", "-c", "cp "+ WorkflowEngine.PROP.getProperty("working_dir")+"dummy "+
-                WorkflowEngine.PROP.getProperty("working_dir")+dbid+"/"
+                "/bin/bash", "-c", "cp "+ Utils.getProp("working_dir")+"dummy "+
+                Utils.getProp("working_dir")+dbid+"/"
             }).waitFor();
         }
         catch (IOException | InterruptedException ex)
@@ -128,9 +124,9 @@ public class Workflow implements Serializable
         new DBRecord("workflow_task_depen", "wfid", dbid, "parent", from.getDbid(), "child", to.getDbid()).insert();
     }
 
-    //Add a start and an end tasks if needed
     public void finalizeWorkflow() throws DBException
     {
+        //Add START and END task if neccessary
         LinkedList<Task> startTasks = new LinkedList<>();
         LinkedList<Task> endTasks = new LinkedList<>();
         for (Task t : tasks)
@@ -168,6 +164,7 @@ public class Workflow implements Serializable
                 addEdge(t, end);
             }
         }
+        
     }
 
     public Task getStartTask()
@@ -195,6 +192,8 @@ public class Workflow implements Serializable
         return graph.getPredecessors(t);
     }
 
+    
+    
     public static Workflow fromDAX(String filename) throws DBException
     {
         File f = new File(filename);
@@ -205,56 +204,70 @@ public class Workflow implements Serializable
             DocumentBuilder db = dbf.newDocumentBuilder();
             Document dom = db.parse(filename);
             Element docEle = dom.getDocumentElement();
-            NodeList nl = docEle.getElementsByTagName("job");
+            NodeList jobNodeList = docEle.getElementsByTagName("job");
 
             HashMap<Integer, Task> tasks = new HashMap<>();
-            if (nl != null && nl.getLength() > 0)
+            if (jobNodeList != null && jobNodeList.getLength() > 0)
             {
-                for (int i = 0; i < nl.getLength(); i++)
+                for (int i = 0; i < jobNodeList.getLength(); i++)
                 {
-                    Element el = (Element) nl.item(i);
-                    String idString = el.getAttribute("id");
+                    Element jobElement = (Element) jobNodeList.item(i);
+                    String idString = jobElement.getAttribute("id");
                     int id = Integer.parseInt(idString.substring(2));
-                    double runtime = Double.parseDouble(el.getAttribute("runtime"));
-                    String taskName = el.getAttribute("name");
+                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
+                    String taskName = jobElement.getAttribute("name");
                     Task task = Task.getWorkflowTask("("+idString+")"+taskName, runtime, wf, "");
-                    StringBuilder cmd = new StringBuilder();
-                    cmd.append("./dummy;").append(runtime).append(";");
+                    StringBuilder cmdBuilder = new StringBuilder();
+                    cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);
 
-                    NodeList files = el.getElementsByTagName("uses");
-                    for (int j = 0; j < files.getLength(); j++)
+                    NodeList fileNodeList = jobElement.getElementsByTagName("uses");
+                    for (int j = 0; j < fileNodeList.getLength(); j++)
                     {
-                        Element fel = (Element) files.item(j);
-                        String fname = fel.getAttribute("file");
-                        String ftype = fel.getAttribute("link");
-                        double fsize = Double.parseDouble(fel.getAttribute("size"));
-                        WorkflowFile wfile = WorkflowFile.getFile(fname, fsize);
-                        if (ftype.equals("input"))
+                        Element fileElement = (Element) fileNodeList.item(j);
+                        String fname = fileElement.getAttribute("file");
+                        String fiotype = fileElement.getAttribute("link");
+                        char ftype = fileElement.getAttribute("type").equals("dir") ? WorkflowFile.TYPE_DIRECTIORY:WorkflowFile.TYPE_FILE;
+                        double fsize = Double.parseDouble(fileElement.getAttribute("size"));
+                        WorkflowFile wfile = WorkflowFile.getFile(fname, fsize, ftype);
+                        if (fiotype.equals("input"))
                         {
-                            cmd.append("i;");
+                            cmdBuilder.append("i;");
                             task.addInputFile(wfile);
+                            wf.inputFiles.add(wfile);
+                            wf.outputFiles.remove(wfile);
                         }
                         else
                         {
-                            cmd.append("o;");
+                            cmdBuilder.append("o;");
                             task.addOutputFile(wfile);
+                            wf.outputFiles.add(wfile);
+                            wf.inputFiles.remove(wfile);
                         }
-                        cmd.append(fname).append(";");
-                        cmd.append(fsize).append(";");
+                        cmdBuilder.append(fname).append(";");
+                        cmdBuilder.append(fsize).append(";");
                     }
-                    cmd.deleteCharAt(cmd.length()-1);
-                    task.setCmd(cmd.toString());
+                    cmdBuilder.deleteCharAt(cmdBuilder.length()-1);
+                    
+                    String cmd = jobElement.getAttribute("cmd");
+                    if(cmd == null)
+                    {
+                        task.setCmd(cmdBuilder.toString());
+                    }
+                    else
+                    {
+                        task.setCmd(cmd);
+                    }
                 }
             }
 
             //Read dependencies
-            nl = docEle.getElementsByTagName("child");
-            if (nl != null && nl.getLength() > 0)
+            jobNodeList = docEle.getElementsByTagName("child");
+            if (jobNodeList != null && jobNodeList.getLength() > 0)
             {
-                for (int i = 0; i < nl.getLength(); i++)
+                for (int i = 0; i < jobNodeList.getLength(); i++)
                 {
-                    Element el = (Element) nl.item(i);
+                    Element el = (Element) jobNodeList.item(i);
                     String refString = el.getAttribute("ref");
                     int childRef = Integer.parseInt(refString.substring(2));
                     Task child = tasks.get(childRef);
@@ -279,8 +292,8 @@ public class Workflow implements Serializable
         }
         wf.finalizeWorkflow();
         wf.prepareWorkingDirectory();
-        wf.createDummyInputFiles();
-        wf.save(WorkflowEngine.PROP.getProperty("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
+//        wf.createDummyInputFiles();
+        wf.save(Utils.getProp("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
         return wf;
     }
     
@@ -312,7 +325,7 @@ public class Workflow implements Serializable
         List<DBRecord> results = DBRecord.select("_workflow_input_file", new DBRecord("_workflow_input_file", "wfid", dbid));
         for(DBRecord r : results)
         {
-            String outfile = WorkflowEngine.PROP.getProperty("working_dir")+dbid+"/"+r.get("name");
+            String outfile = Utils.getProp("working_dir")+dbid+"/"+r.get("name");
             try{
             Process p = Runtime.getRuntime().exec(new String[]
             {
@@ -325,6 +338,11 @@ public class Workflow implements Serializable
                 TaskManager.logger.log("Exception while creating a dummy input file: "+ex.getMessage());
             }
         }
+    }
+    
+    public List<WorkflowFile> getInputFiles()
+    {
+        return new ArrayList(inputFiles);
     }
     
     public void save(String filename)
@@ -357,5 +375,15 @@ public class Workflow implements Serializable
             TaskManager.logger.log("Cannot read the workflow object: "+ex.getMessage());
         }
         return null;
+    }
+    
+    public String getWorkingDirSuffix()
+    {
+        return "wf_"+dbid+"/";
+    }
+    
+    public static void main(String[] args)
+    {
+        fromDAX(args[0]);
     }
 }

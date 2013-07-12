@@ -16,26 +16,12 @@ public class ExecSite
 {
     //private SparseGraph<Server, NetworkLink> network = new SparseGraph<>();
     private HashMap<String, NetworkLink> edges = new HashMap<>();
-    private ArrayList<Worker> servers = new ArrayList<>();
+    private ArrayList<Worker> workers = new ArrayList<>();
     private double storageLinkSpd = 1.0;
-    /*public void addLink(Worker s1, Worker s2, double MBps)
-    {
-        if(!servers.contains(s1))
-        {
-            servers.add(s1);
-        }
-        if(!servers.contains(s2))
-        {
-            servers.add(s2);
-        }
-        NetworkLink link = new NetworkLink(MBps);
-        //network.addEdge(link, s1, s2);
-        edges.put(s1.getEdgeName(s2), link);
-    }*/
-    
+
     public void addWorker(Worker w)
     {
-        servers.add(w);
+        workers.add(w);
     }
     public double getTransferTime(Worker from, Worker to, WorkflowFile f)
     {
@@ -48,7 +34,7 @@ public class ExecSite
     }
     public int getTotalWorkers()
     {
-        return servers.size();
+        return workers.size();
     }
 //    public static ExecSite random(int count)
 //    {
@@ -72,7 +58,7 @@ public class ExecSite
     
     public Worker getWorker(int i)
     {
-        return servers.get(i);
+        return workers.get(i);
     }
     
     public void print()

@@ -16,9 +16,6 @@ import workflowengine.workflow.Task;
  */
 public class Worker
 {
-
-//    private String name;
-//    private int port;
     private HostAddress addr;
     private HostAddress espAddr;
     private double cpu; //Operations per time unit: represent server's performance
@@ -34,7 +31,6 @@ public class Worker
             double freeStorage, double freeMemory, int dbid,
             int currentTaskDbid, String uuid)
     {
-//        this.id = id;
         this.addr = addr;
         this.espAddr = epsAddr;
         this.cpu = cpu;
@@ -74,9 +70,16 @@ public class Worker
 
     public void insert()
     {
+        int esid = new DBRecord("exec_site", 
+                "hostname", espAddr.getHost(),
+                "port", espAddr.getPort()).insertIfNotExist();
+        
+        
         dbid = new DBRecord("worker",
                 "hostname", addr.getHost(),
                 "port", addr.getPort(),
+                "esp_hostname", espAddr.getHost(),
+                "esp_port", espAddr.getPort(),
                 "cpu", cpu,
                 "unit_cost", unitCost,
                 "free_space", freeStorage,
@@ -84,9 +87,9 @@ public class Worker
                 "current_tid", currentTaskDbid,
                 "uuid", uuid,
                 "updated", Utils.time(),
-                "esp_hostname", espAddr.getHost(),
-                "esp_port", espAddr.getPort()
+                "esid", esid
          ).insert();
+        
     }
 
     public static void updateWorkerStatus(HostAddress espAddr, HostAddress workerAddr, int currentTid, double freeMem, double freeStorage, double cpu, String uuid)
@@ -184,4 +187,11 @@ public class Worker
     {
         return addr.getHost() + "(" + cpu + ")";
     }
+
+    public HostAddress getEspAddr()
+    {
+        return espAddr;
+    }
+    
+    
 }

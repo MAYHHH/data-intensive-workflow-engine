@@ -13,7 +13,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import static workflowengine.WorkflowEngine.*;
 
 /**
  *
@@ -49,13 +48,13 @@ public class DBRecord
         {
             try
             {
-                String url = "jdbc:mysql://" + PROP.getProperty("DBHost") + ":" + PROP.getProperty("DBPort") + "/" + PROP.getProperty("DBName");
+                String url = "jdbc:mysql://" + Utils.getProp("DBHost") + ":" + Utils.getProp("DBPort") + "/" + Utils.getProp("DBName");
 //                System.out.println(url);
                 Class.forName("com.mysql.jdbc.Driver");
                 con = DriverManager.getConnection(
                         url,
-                        PROP.getProperty("DBUser"),
-                        PROP.getProperty("DBPass"));
+                        Utils.getProp("DBUser"),
+                        Utils.getProp("DBPass"));
             }
             catch (ClassNotFoundException | SQLException ex)
             {
@@ -102,6 +101,30 @@ public class DBRecord
         return record.size();
     }
 
+    /**
+     * Insert this record if not exist in DB. 
+     * Otherwise, return the value of first primary key of 
+     * the first found record.
+     * @return 
+     */
+    public int insertIfNotExist()
+    {
+        List<DBRecord> res = select(table, this);
+        if(res.isEmpty())
+        {
+            return insert();
+        }
+        else
+        {
+            return res.get(0).getInt(getFirstPrimaryKeyName(table));
+        }
+    }
+    
+    public String getFirstPrimaryKeyName(String table)
+    {
+        return select("SHOW KEYS FROM "+table+" WHERE Key_name = 'PRIMARY'").get(0).get("Column_name");
+    }
+    
     public int insert()
     {
             StringBuilder query = new StringBuilder();
@@ -171,12 +194,11 @@ public class DBRecord
 
             if (where.getFieldCount() > 0)
             {
-                query.append(" WHERE ");
+                query.append(" WHERE 1 ");
                 for (String key : where.record.keySet())
                 {
-                    query.append(" ").append(key).append("='").append(where.get(key)).append("', ");
+                    query.append(" AND ").append(key).append("='").append(where.get(key)).append("'");
                 }
-                query.delete(query.length() - 2, query.length());
             }
 //            System.out.println(query);
             return con.createStatement().executeUpdate(query.toString());
@@ -229,12 +251,11 @@ public class DBRecord
         prepareConnection();
         StringBuilder query = new StringBuilder();
         query.append("SELECT * FROM ").append(table);
-        query.append(" WHERE ");
+        query.append(" WHERE 1 ");
         for (String key : where.record.keySet())
         {
-            query.append(" ").append(key).append("='").append(where.get(key)).append("', ");
+            query.append(" AND ").append(key).append("='").append(where.get(key)).append("'");
         }
-        query.delete(query.length() - 2, query.length());
         return select(table, query.toString());
     }
 
@@ -274,24 +295,5 @@ public class DBRecord
         }
         sb.delete(sb.length() - 2, sb.length());
         return sb.toString();
-    }
-
-    public static void main(String[] args)
-    {
-        PROP.setProperty("DBHost", "localhost");
-        PROP.setProperty("DBPort", "3306");
-        PROP.setProperty("DBName", "workflow_engine");
-        PROP.setProperty("DBUser", "root");
-        PROP.setProperty("DBPass", "1234");
-
-        /*Collection<DBRecord> results = select("worker");
-         for(DBRecord r:results)
-         {
-         System.out.println(r.toString());
-         r.unset("id");
-         r.set("cpu", 1);
-         r.update();
-         }*/
-        new DBRecord("worker", "cpu", "515").update(new DBRecord("worker", "id", "3"));
     }
 }

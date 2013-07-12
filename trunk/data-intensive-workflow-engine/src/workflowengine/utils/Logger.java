@@ -18,11 +18,13 @@ import java.util.Date;
 public class Logger
 {
     private PrintWriter pw;
+    private OutputStream os;
     public Logger(String filename)
     {
         try
         {
-            pw = new PrintWriter(new FileOutputStream(filename, true));
+            os = new FileOutputStream(filename, true);
+            pw = new PrintWriter(os);
         }
         catch(FileNotFoundException ex)
         {
@@ -38,4 +40,11 @@ public class Logger
         pw.println(msg);
         pw.flush();
     }
+    
+    public void log(String msg, Exception ex)
+    {
+        log(msg);
+        ex.printStackTrace(pw);
+        pw.flush();
+    }    
 }

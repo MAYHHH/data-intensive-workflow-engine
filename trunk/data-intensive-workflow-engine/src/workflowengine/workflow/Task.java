@@ -1,5 +1,6 @@
 package workflowengine.workflow;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,8 +12,15 @@ import workflowengine.utils.DBRecord;
  *
  * @author Orachun
  */
-public class Task
+public class Task implements Serializable
 {
+    public static final char STATUS_WAITING = 'W';
+    public static final char STATUS_DISPATCHED = 'D';
+    public static final char STATUS_EXECUTING = 'E';
+    public static final char STATUS_COMPLETED = 'C';
+    public static final char STATUS_FAIL = 'F';
+    public static final char STATUS_SUSPENDED = 'S';
+    
     private static int count = 0;
     private int id;
     private String workflowName;
@@ -190,26 +198,55 @@ public class Task
 //    {
 //        outputFiles.put(f.getName(), f);
 //    }
-    public List<WorkflowFile> getInputFiles() throws DBException
+    public WorkflowFile[] getInputFiles() throws DBException
     {
-        List<DBRecord> results = DBRecord.select("workflow_task_file", new DBRecord("workflow_task_file", "type", "I", "wtif", dbid));
-        List<WorkflowFile> files = new ArrayList<>(results.size());
-        for (DBRecord r : results)
+        List<DBRecord> results = DBRecord.select("workflow_task_file", new DBRecord("workflow_task_file", "type", "I", "tid", dbid));
+        WorkflowFile[] files = new WorkflowFile[results.size()];
+        for (int i=0;i<results.size();i++)
         {
-            WorkflowFile f = WorkflowFile.getFile(r.get("name"), Integer.parseInt(r.get("estsize")));
-            files.add(f);
+            WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
+            files[i]=f;
+        }
+        return files;
+    }
+    public String[] getInputFilesString() throws DBException
+    {
+        List<DBRecord> results = DBRecord.select(
+                "SELECT f.name "
+                + "FROM workflow_task_file tf "
+                + "JOIN file f on tf.fid = f.fid "
+                + "WHERE type='I' AND tid='"+dbid+"'");
+        
+        String[] files = new String[results.size()];
+        for (int i=0;i<results.size();i++)
+        {
+            files[i] = results.get(i).get("name");
         }
         return files;
     }
 
-    public List<WorkflowFile> getOutputFiles() throws DBException
+    public WorkflowFile[] getOutputFiles() throws DBException
     {
-        List<DBRecord> results = DBRecord.select("workflow_task_file", new DBRecord("workflow_task_file", "type", "O", "wtif", dbid));
-        List<WorkflowFile> files = new ArrayList<>(results.size());
-        for (DBRecord r : results)
+        List<DBRecord> results = DBRecord.select("workflow_task_file", new DBRecord("workflow_task_file", "type", "O", "tid", dbid));
+        WorkflowFile[] files = new WorkflowFile[results.size()];
+        for (int i=0;i<results.size();i++)
         {
-            WorkflowFile f = WorkflowFile.getFile(r.get("name"), Integer.parseInt(r.get("estsize")));
-            files.add(f);
+            WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
+            files[i]=f;
+        }
+        return files;
+    }
+    public String[] getOutputFilesString() throws DBException
+    {
+        List<DBRecord> results = DBRecord.select(
+                "SELECT f.name "
+                + "FROM workflow_task_file tf "
+                + "JOIN file f on tf.fid = f.fid "
+                + "WHERE type='O' AND tid='"+dbid+"'");
+        String[] files = new String[results.size()];
+        for (int i=0;i<results.size();i++)
+        {
+            files[i] = results.get(i).get("name");
         }
         return files;
     }
@@ -248,5 +285,11 @@ public class Task
         hash = 17 * hash + Objects.hashCode(this.workflowName);
         hash = 17 * hash + Objects.hashCode(this.name);
         return hash;
+    }
+    
+    
+    public String getWorkingDirSuffix()
+    {
+        return "wf_"+wfdbid+"/";
     }
 }

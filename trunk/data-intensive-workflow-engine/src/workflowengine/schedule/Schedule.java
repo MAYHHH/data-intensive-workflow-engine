@@ -16,7 +16,7 @@ import workflowengine.workflow.Task;
  */
 public class Schedule
 {
-    private final SchedulerSettings settings;
+    protected final SchedulerSettings settings;
 //    private Random r;
 //    private final Workflow wf;
 //    private final ExecSite es;

@@ -7,6 +7,7 @@ package workflowengine;
 import java.io.IOException;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.Message;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -14,19 +15,28 @@ import workflowengine.communication.Message;
  */
 public class SubmitWorkflow
 {
+    public static void usage()
+    {
+        System.out.println("Usage: SubmitWorkflow DAX_FILE INPUT_FILE_DIR");
+    }
+    
     public static void main(String[] args) throws IOException
     {
-        if(args.length == 0)
+        if(args.length != 2)
         {
-            System.err.println("Please specify DAG file.");
+            System.err.println("Please specify DAG file and input file directory.");
+            usage();
             System.exit(1);
         }
+        String daxFile = args[0];
+        String inputDir = args[1];
+        
         Message msg = new Message(Message.TYPE_SUBMIT_WORKFLOW);
-        msg.setParam("dax_file", args[0]);
-        WorkflowEngine we = new WorkflowEngine();
-        we.init();
-        String host = WorkflowEngine.PROP.getProperty("task_manager_host");
-        int port = Integer.parseInt(WorkflowEngine.PROP.getProperty("task_manager_port"));
+        msg.setParam("dax_file", daxFile);
+        msg.setParam("input_dir", inputDir);
+        
+        String host = Utils.getProp("task_manager_host");
+        int port = Utils.getIntProp("task_manager_port");
         new Communicable().sendMessage(host, port, msg);
     }
 }

@@ -5,11 +5,11 @@
 package workflowengine.utils;
 
 import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Properties;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  *
@@ -21,6 +21,56 @@ public class Utils
     public static final double MB = 1;
     public static final double GB = 1024;
     public static final double TB = 1024*1024;
+    private static final Properties PROP = new Properties();
+    private static final String CONFIG_FILE = "default.properties";
+    private static boolean isPropInited = false;
+    
+    public static void main(String[] args)
+    {
+    }
+
+    public static Properties getPROP()
+    {
+        initProp();
+        return PROP;
+    }
+    
+    
+    
+    public static void initProp()
+    {
+        if (!isPropInited)
+        {
+            try
+            {
+                InputStreamReader is = new FileReader(CONFIG_FILE);
+                PROP.load(is);
+                is.close();
+                PROP.setProperty("home_dir", System.getProperty("user.home"));
+                isPropInited = true;
+            }
+            catch (IOException ex)
+            {
+                System.err.println("Cannot read the configuration file " + CONFIG_FILE + ".");
+                System.exit(2);
+            }
+        }
+    }
+    public static String getProp(String name)
+    {
+        initProp();
+        return PROP.getProperty(name);
+    }
+    public static int getIntProp(String name)
+    {
+        String s = getProp(name);
+        return s == null ? null : Integer.parseInt(s);
+    }
+    public static double getDoubleProp(String name)
+    {
+        String s = getProp(name);
+        return s == null ? null : Double.parseDouble(s);
+    }
     
     
     public static long time()
