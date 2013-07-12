@@ -4,6 +4,7 @@
  */
 package workflowengine.workflow;
 
+import java.io.Serializable;
 import workflowengine.utils.DBException;
 import workflowengine.utils.DBRecord;
 
@@ -11,28 +12,34 @@ import workflowengine.utils.DBRecord;
  *
  * @author Orachun
  */
-public class WorkflowFile
+public class WorkflowFile implements Serializable
 {
 //    private static int count = 0;
 //    private static ArrayList<WorkflowFile> files = new ArrayList<>();
 //    private int id;
+    public static final char TYPE_FILE = 'F';
+    public static final char TYPE_DIRECTIORY = 'D';
     private double size = 0;//MB
     private String name = "";
     private int dbid;
-    private WorkflowFile(String name, double size)
+    private char type;
+    private WorkflowFile(String name, double size, char type)
     {
         this.size = size;
         this.name = name;
-//        id = count++;
-//        files.add(this);
+        this.type = type;
     }
-    public static WorkflowFile getFile(String name, double size) throws DBException
+    public static WorkflowFile getFile(String name, double size, char type) throws DBException
     {
         WorkflowFile f = getFileFromDB(name);
         if(f == null)
         {
-            f = new WorkflowFile(name, size);
-            f.dbid = new DBRecord("file", "name", name, "estsize", size).insert();
+            f = new WorkflowFile(name, size, type);
+            f.dbid = new DBRecord("file", 
+                    "name", name, 
+                    "estsize", size, 
+                    "file_type", type
+                    ).insert();
         }
         return f;
     }
@@ -43,7 +50,7 @@ public class WorkflowFile
         try
         {
             DBRecord res = DBRecord.select("file", new DBRecord("file", "name", name)).get(0);
-            f = new WorkflowFile(res.get("name"), res.getDouble("estsize"));
+            f = new WorkflowFile(res.get("name"), res.getDouble("estsize"), res.get("file_type").charAt(0));
             f.dbid = res.getInt("fid");
             return f;
         }
@@ -53,11 +60,28 @@ public class WorkflowFile
         }
     }
     
-//    public static WorkflowFile get(int id)
-//    {
-//        return files.get(id);
-//    }
+    public static WorkflowFile getFileFromDB(int dbid)
+    {
+        WorkflowFile f;
+        try
+        {
+            DBRecord res = DBRecord.select("file", new DBRecord("file", "fid", dbid)).get(0);
+            f = new WorkflowFile(res.get("name"), res.getDouble("estsize"), res.get("file_type").charAt(0));
+            f.dbid = res.getInt("fid");
+            return f;
+        }
+        catch(IndexOutOfBoundsException ex)
+        {
+            return null;
+        }
+    }
 
+
+    public char getType()
+    {
+        return type;
+    }
+    
     public double getSize()
     {
         return size;
@@ -73,5 +97,8 @@ public class WorkflowFile
         return dbid;
     }
 
-
+    public String toString()
+    {
+        return "["+type+"]name("+dbid+"):"+size+"MB";
+    }
 }

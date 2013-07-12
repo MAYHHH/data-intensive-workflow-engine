@@ -4,11 +4,14 @@
  */
 package workflowengine;
 
+import com.zehon.exception.FileTransferException;
 import java.io.IOException;
 import java.util.HashMap;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
+import workflowengine.utils.SFTPUtils;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -16,24 +19,23 @@ import workflowengine.communication.Message;
  */
 public class ExecutionSiteProxy
 {
+
     private static workflowengine.utils.Logger logger = new workflowengine.utils.Logger("execution-site-proxy.log");
-    
     private HostAddress managerAddr;
     private HostAddress addr;
     private static ExecutionSiteProxy esp = null;
     private HashMap<String, HostAddress> workerMap = new HashMap<>(); //<uuid, host address>
-    
-    private Communicable comm = new Communicable(){
-
+    private Communicable comm = new Communicable()
+    {
         @Override
         public void handleMessage(Message msg)
         {
-            
+
             HostAddress target = managerAddr;
             try
             {
                 HostAddress workerAddr;
-                switch(msg.getType())
+                switch (msg.getType())
                 {
                     //From manager to executor
                     case Message.TYPE_DISPATCH_TASK:
@@ -43,7 +45,7 @@ public class ExecutionSiteProxy
                         target = workerAddr;
                         comm.sendMessage(workerAddr, msg);
                         break;
-                        
+
                     //From executor to manager
                     case Message.TYPE_UPDATE_TASK_STATUS:
                     case Message.TYPE_UPDATE_NODE_STATUS:
@@ -51,7 +53,7 @@ public class ExecutionSiteProxy
                     case Message.TYPE_SUSPEND_TASK_COMPLETE:
                         String uuid = msg.getParam("uuid");
                         workerAddr = workerMap.get(uuid);
-                        if(workerAddr == null)
+                        if (workerAddr == null)
                         {
                             workerAddr = new HostAddress(msg.getParam("FROM"), msg.getIntParam("port"));
                             workerMap.put(uuid, workerAddr);
@@ -61,32 +63,64 @@ public class ExecutionSiteProxy
                         target = managerAddr;
                         comm.sendMessage(managerAddr, msg);
                         break;
+                    case Message.TYPE_FILE_UPLOAD_REQUEST:
+                        uploadFile(msg);
                 }
             }
             catch (IOException ex)
             {
-                logger.log("Cannot sent message to "+target+": "+ex.getMessage());
+                logger.log("Cannot sent message to " + target + ": " + ex.getMessage());
             }
         }
     };
-    
-    
-    private ExecutionSiteProxy()
+
+    private ExecutionSiteProxy() throws IOException
     {
-        addr = new HostAddress(WorkflowEngine.PROP, "exec_site_proxy_host", "exec_site_proxy_port");
-        managerAddr = new HostAddress(WorkflowEngine.PROP, "task_manager_host", "task_manager_port");
+        addr = new HostAddress(Utils.getPROP(), "exec_site_proxy_host", "exec_site_proxy_port");
+        managerAddr = new HostAddress(Utils.getPROP(), "task_manager_host", "task_manager_port");
         comm.setLocalPort(addr.getPort());
         comm.startServer();
     }
-    
-    public static ExecutionSiteProxy start()
+
+    public static ExecutionSiteProxy startService()
     {
-        if(esp == null)
+        try
         {
-            esp = new ExecutionSiteProxy();
+            if (esp == null)
+            {
+                esp = new ExecutionSiteProxy();
+            }
+            logger.log("Execution site proxy is started.");
+            return esp;
         }
-        logger.log("Execution site proxy is started.");
-        return esp;
+        catch (IOException ex)
+        {
+            logger.log("Cannot start execution site proxy: " + ex.getLocalizedMessage());
+            return null;
+        }
     }
-    
+
+    public void uploadFile(Message msg)
+    {
+        Message response = new Message(Message.TYPE_RESPONSE);
+        String filename = msg.getParam("filename");
+        String dir = msg.getParam("dir");
+        try
+        {
+            SFTPUtils.getSFTP(msg.getParam("upload_to")).sendFile(dir + filename, dir);
+            response.setParam("status", "complete");
+        }
+        catch (FileTransferException ex)
+        {
+            response.setParam("status", "fail");
+        }
+        try
+        {
+            comm.sendResponseMsg(msg, response);
+        }
+        catch (IOException ex)
+        {
+            logger.log("Cannot send message: " + ex.getMessage());
+        }
+    }
 }

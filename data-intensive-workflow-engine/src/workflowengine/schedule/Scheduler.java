@@ -4,12 +4,6 @@
  */
 package workflowengine.schedule;
 
-import java.util.HashMap;
-import workflowengine.resource.ExecSite;
-import workflowengine.resource.Worker;
-import workflowengine.workflow.Task;
-import workflowengine.workflow.Workflow;
-
 /**
  *
  * @author Orachun

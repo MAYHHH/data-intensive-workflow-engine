@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 import workflowengine.resource.ExecSite;
 import workflowengine.resource.Worker;
 import workflowengine.workflow.Task;
@@ -41,8 +42,12 @@ public class SchedulerSettings
         {
             taskList.removeAll(fixedMapping.keySet());
             this.fixedMapping.putAll(fixedMapping);
+            fixedTasks = fixedMapping.keySet();
         }
-        fixedTasks = fixedMapping.keySet();
+        else
+        {
+            fixedTasks = new TreeSet<>();
+        }
     }
     
     public SchedulerSettings(Workflow wf, ExecSite es)
