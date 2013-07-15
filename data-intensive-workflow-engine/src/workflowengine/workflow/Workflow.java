@@ -146,7 +146,7 @@ public class Workflow implements Serializable
         }
         else
         {
-            start = Task.getWorkflowTask("START", 0, this, "./dummy;0");
+            start = Task.getWorkflowTask("START", 0, this, "./dummy;0", "Dummy");
             for (Task t : startTasks)
             {
                 addEdge(start, t);
@@ -158,7 +158,7 @@ public class Workflow implements Serializable
         }
         else
         {
-            end = Task.getWorkflowTask("END", 0, this, "./dummy;0");
+            end = Task.getWorkflowTask("END", 0, this, "./dummy;0", "Dummy");
             for (Task t : endTasks)
             {
                 addEdge(t, end);
@@ -216,7 +216,8 @@ public class Workflow implements Serializable
                     int id = Integer.parseInt(idString.substring(2));
                     double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
                     String taskName = jobElement.getAttribute("name");
-                    Task task = Task.getWorkflowTask("("+idString+")"+taskName, runtime, wf, "");
+                    String taskNameSpace = jobElement.getAttribute("namespace");
+                    Task task = Task.getWorkflowTask("("+idString+")"+taskName, runtime, wf, "", taskNameSpace);
                     StringBuilder cmdBuilder = new StringBuilder();
                     cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);

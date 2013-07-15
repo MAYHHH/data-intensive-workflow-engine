@@ -189,7 +189,7 @@ public class TaskExecutor
     {
         String cmdPrefix = Utils.getProp("command_prefix");
         StringBuilder cmd = new StringBuilder();
-        cmd.append(cmdPrefix).append(msg.getParam("cmd"));
+        cmd.append(cmdPrefix).append(currentWorkingDir).append(msg.getParam("cmd"));
         if(msg.getParam("migrate") != null)
         {
             cmd.append(";-_condor_restart;").append(currentTaskName).append(".ckpt");
@@ -240,10 +240,22 @@ public class TaskExecutor
         }
     }
     
-    private void downloadExecutable(String execName) throws FileTransferException
+    private void downloadExecutable(Message msg) throws FileTransferException
     {
-        SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
-                .getFile(execName, Utils.getProp("code_repository_dir"), currentWorkingDir);
+        String namespace = msg.getParam("namespace");
+        if(!Utils.isFileExist(currentWorkingDir+namespace+"/"))
+        {
+            long time = System.currentTimeMillis();
+            SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
+                .getFolder(Utils.getProp("code_repository_dir")+namespace+"/", currentWorkingDir, null);
+            Utils.setExecutableInDirSince(currentWorkingDir, time);
+        }
+        
+        
+//        String execName = msg.getParam("cmd").split(";")[0];
+//        SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
+//                .getFile(execName, Utils.getProp("code_repository_dir"), currentWorkingDir);
+//        new File(currentWorkingDir+execName).setExecutable(true);
     }
     
     private Process startProcess(String[] cmds) throws IOException
@@ -288,7 +300,7 @@ public class TaskExecutor
         currentTaskDbid = msg.getIntParam("tid");
         prepareDirectory(msg);
         downloadInputFiles(msg);
-        downloadExecutable(currentProcName);
+        downloadExecutable(msg);
         return cmds;
     }
     

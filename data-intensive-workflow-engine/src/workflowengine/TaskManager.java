@@ -233,6 +233,7 @@ public class TaskManager
             String dir = Utils.getProp("exec_site_file_storage_dir") + t.getWorkingDirSuffix();
             msg.setParam("cmd", t.getCmd());
             msg.setParam("task_name", t.getName());
+            msg.setParam("task_namespace", t.getNamespace());
             msg.setParam("tid", t.getDbid());
             msg.setParam("wfid", t.getWfdbid());
             msg.setParam("uuid", r.get("uuid"));
