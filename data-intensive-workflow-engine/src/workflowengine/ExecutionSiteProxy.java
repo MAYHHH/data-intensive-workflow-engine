@@ -30,7 +30,6 @@ public class ExecutionSiteProxy
         @Override
         public void handleMessage(Message msg)
         {
-
             HostAddress target = managerAddr;
             try
             {
@@ -51,11 +50,12 @@ public class ExecutionSiteProxy
                     case Message.TYPE_UPDATE_NODE_STATUS:
                     case Message.TYPE_SUBMIT_WORKFLOW:
                     case Message.TYPE_SUSPEND_TASK_COMPLETE:
+                    case Message.TYPE_REGISTER_FILE:
                         String uuid = msg.getParam("uuid");
                         workerAddr = workerMap.get(uuid);
                         if (workerAddr == null)
                         {
-                            workerAddr = new HostAddress(msg.getParam("FROM"), msg.getIntParam("port"));
+                            workerAddr = new HostAddress(msg.getParam(Message.PARAM_FROM), msg.getIntParam("port"));
                             workerMap.put(uuid, workerAddr);
                         }
                         msg.setParam("address", workerAddr);
@@ -65,11 +65,12 @@ public class ExecutionSiteProxy
                         break;
                     case Message.TYPE_FILE_UPLOAD_REQUEST:
                         uploadFile(msg);
+                        break;
                 }
             }
             catch (IOException ex)
             {
-                logger.log("Cannot sent message to " + target + ": " + ex.getMessage());
+                logger.log("Cannot sent message to " + target + ": " + ex.getMessage(), ex);
             }
         }
     };

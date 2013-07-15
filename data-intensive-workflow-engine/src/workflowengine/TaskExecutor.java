@@ -121,6 +121,11 @@ public class TaskExecutor
    
     public void updateNodeStatus()
     {
+        updateNodeStatus(true);
+    }
+    
+    public void updateNodeStatus(boolean sync)
+    {
         Message response = new Message(Message.TYPE_UPDATE_NODE_STATUS);
         response.setParam("status", status);
         File defaultStorage = new File(Utils.getProp("working_dir"));
@@ -131,9 +136,19 @@ public class TaskExecutor
         response.setParam("port", this.port);
         try
         {
-            comm.sendMessage(espAddr, response);
+            if(sync)
+            {
+                comm.sendForResponseSync(espAddr, this.port, response);
+            }
+            else
+            {
+                comm.sendMessage(espAddr, response);
+            }
         }
-        catch (IOException ex){}
+        catch (IOException | InterruptedException ex)
+        {
+            logger.log("Cannot update node status.", ex);
+        }
     }
     
     public double getFreeMemory()
@@ -212,6 +227,7 @@ public class TaskExecutor
             String localFilePath = currentWorkingDir+f.getName();
             if(f.getType() == WorkflowFile.TYPE_DIRECTIORY)
             {
+                Utils.createDir(localFilePath);
                 client.getFolder(remoteDir+f.getName(), localFilePath, null);
             }
             else
@@ -229,8 +245,9 @@ public class TaskExecutor
         for(WorkflowFile f : files)
         {
             String localFilePath = currentWorkingDir+f.getName();
-            if(new File(localFilePath).isDirectory())
+            if(Utils.isDir(localFilePath))
             {
+                client.createFolder(f.getName(), remoteDir);
                 client.sendFolder(localFilePath, remoteDir, null);
             }
             else
@@ -238,11 +255,22 @@ public class TaskExecutor
                 client.sendFile(localFilePath, remoteDir);
             }
         }
+        
+        Message outputFileMsg = new Message(Message.TYPE_REGISTER_FILE);
+        outputFileMsg.setParam("files", files);
+        try
+        {
+            comm.sendMessage(espAddr, outputFileMsg);
+        }
+        catch (IOException ex)
+        {
+            logger.log("Cannot send file registering message to "+espAddr+": "+ex.getMessage(), ex);
+        }
     }
     
     private void downloadExecutable(Message msg) throws FileTransferException
     {
-        String namespace = msg.getParam("namespace");
+        String namespace = msg.getParam("task_namespace");
         if(!Utils.isFileExist(currentWorkingDir+namespace+"/"))
         {
             long time = System.currentTimeMillis();
@@ -264,7 +292,8 @@ public class TaskExecutor
                 currentWorkingDir));
         pb.redirectError(new File(currentWorkingDir + currentTaskName + ".stderr"));
         pb.redirectOutput(new File(currentWorkingDir + currentTaskName + ".stdout"));
-
+        String path = pb.environment().get("PATH") + ":"+currentWorkingDir;
+        pb.environment().put("PATH", path);
         currentTaskStart = Utils.time();
         logger.log("Starting execution of task "+currentTaskName+".");
         return pb.start();
@@ -276,16 +305,26 @@ public class TaskExecutor
         WorkflowFile[] outputs = (WorkflowFile[])msg.getObjectParam("output_files");
         for(WorkflowFile f : inputs)
         {
+            File file = new File(currentWorkingDir+f.getName());
             if(f.getType() == WorkflowFile.TYPE_DIRECTIORY)
             {
-                new File(currentWorkingDir+f.getName()).mkdirs();
+                file.mkdirs();
+            }
+            else
+            {
+                file.getParentFile().mkdirs();
             }
         }
         for(WorkflowFile f : outputs)
         {
+            File file = new File(currentWorkingDir+f.getName());
             if(f.getType() == WorkflowFile.TYPE_DIRECTIORY)
             {
-                new File(currentWorkingDir+f.getName()).mkdirs();
+                file.mkdirs();
+            }
+            else
+            {
+                file.getParentFile().mkdirs();
             }
         }
     }
@@ -360,9 +399,8 @@ public class TaskExecutor
             uploadOutputFiles(msg);
             
             setIdle();
-            updateNodeStatus();
+            updateNodeStatus(true);
             comm.sendMessage(espAddr, response);
-            
         }
         catch (IOException | InterruptedException | FileTransferException ex) 
         {

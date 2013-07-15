@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Level;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
@@ -64,6 +65,9 @@ public class TaskManager
                 case Message.TYPE_SUSPEND_TASK_COMPLETE:
                     suspendComplete();
                     break;
+                case Message.TYPE_REGISTER_FILE:
+                    registerFileInProxy(msg);
+                    break;
             }
         }
     };
@@ -106,6 +110,18 @@ public class TaskManager
                 msg.getDoubleParam("free_space"),
                 msg.getDoubleParam("cpu"),
                 msg.getParam("uuid"));
+        
+        if(msg.getBooleanParam(Message.PARAM_NEED_RESPONSE))
+        {
+            try
+            {
+                comm.sendEmptyResponseMsg(msg);
+            }
+            catch (IOException ex)
+            {
+                logger.log("Cannot send response message.", ex);
+            }
+        }
     }
 
     synchronized public void updateTaskStatus(Message msg)
@@ -183,9 +199,14 @@ public class TaskManager
 
     private void insertFileToEsp(int fid)
     {
+        insertFileToEsp(fid, nearestEsp);
+    }
+    
+    private void insertFileToEsp(int fid, HostAddress espAddr)
+    {
         int esid = new DBRecord("exec_site",
-                "hostname", nearestEsp.getHost(),
-                "port", nearestEsp.getPort()).insertIfNotExist();
+                "hostname", espAddr.getHost(),
+                "port", espAddr.getPort()).insertIfNotExist();
         new DBRecord("exec_site_file",
                 "esid", esid,
                 "fid", fid).insert();
@@ -357,6 +378,16 @@ public class TaskManager
         if (suspendCount == workerCount)
         {
             dispatchTask();
+        }
+    }
+    
+    public void registerFileInProxy(Message msg)
+    {
+        WorkflowFile[] wfiles = (WorkflowFile[])msg.getObjectParam("files");
+        HostAddress esp = (HostAddress)msg.getObjectParam("esp_address");
+        for(WorkflowFile f : wfiles)
+        {
+            insertFileToEsp(f.getDbid(), esp);
         }
     }
 }

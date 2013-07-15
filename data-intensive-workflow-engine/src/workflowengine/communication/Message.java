@@ -25,6 +25,19 @@ public class Message implements Serializable
     public static final short TYPE_SUBMIT_WORKFLOW = 8;
     public static final short TYPE_FILE_UPLOAD_REQUEST = 10;
     public static final short TYPE_RESPONSE = 11;
+    public static final short TYPE_REGISTER_FILE = 12;
+    
+    public static final String PARAM_NEED_RESPONSE = "#NEED_RESPONSE";
+    public static final String PARAM_MSG_UUID = "#MSG_UUID";
+    public static final String PARAM_STATE = "#STATE";
+    public static final String PARAM_RESPONSE_PORT = "#RESPONSE_PORT";
+    public static final String PARAM_FROM = "#FROM";
+    public static final String PARAM_FROM_PORT = "#FROM_PORT";
+    
+    public static final String STATE_REQUEST = "#REQUEST";
+    public static final String STATE_RESPONSE = "#RESPONSE";
+    
+    
     private int type;
     private HashMap<String, Object> params = new HashMap<>();
 
@@ -65,6 +78,11 @@ public class Message implements Serializable
         return o == null ? null : Integer.parseInt(o.toString());
     }
 
+    public boolean getBooleanParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : (boolean)o;
+    }
     
     public void setParam(String s, Object o)
     {
