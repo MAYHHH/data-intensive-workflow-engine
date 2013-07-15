@@ -10,6 +10,9 @@ import java.io.FileFilter;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -126,6 +129,10 @@ public class Utils
     {
         return new File(path).exists();
     }
+    public static boolean isDir(String path)
+    {
+        return new File(path).isDirectory();
+    }
     public static void setExecutable(String path)
     {
         new File(path).setExecutable(true);
@@ -144,4 +151,20 @@ public class Utils
             f.setExecutable(true);
         }
     }
+    public static void createDir(String path)
+    {
+        new File(path).mkdirs();
+    }
+    
+    public static void printMap(OutputStream out, Map m)
+    {
+        PrintWriter pw = new PrintWriter(out);
+        pw.println("Printing map ...");
+        for(Object k : m.keySet())
+        {
+            pw.println(k+": "+m.get(k));
+        }
+        pw.flush();
+    }
+    
 }

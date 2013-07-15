@@ -10,17 +10,17 @@ package workflowengine.communication;
  */
 import java.io.*;
 import java.net.*;
-import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
 
 public class Communicable
 {
     private int localPort = 0;
     private Message templateMsg = new Message(-1);
-    private HashMap<String, Message> waitingThreads = new HashMap<>();
-    private HashMap<String, Message> responseMsg = new HashMap<>();
+    private SynchronizedHashMap<String, Message> waitingMsgs = new SynchronizedHashMap<>();
+    private SynchronizedHashMap<String, Message> responseMsgs = new SynchronizedHashMap<>();
 
     public void startServer() throws IOException
     {
@@ -43,16 +43,18 @@ public class Communicable
                             {
                                 try
                                 {
-                                    ObjectInputStream os = new ObjectInputStream(socket.getInputStream());
-                                    Message msg = (Message) os.readObject();
-                                    msg.setParam("FROM", socket.getInetAddress().getHostAddress());
-                                    msg.setParam("FROM_PORT", socket.getPort());
-                                    String res = msg.getParam("#STATE");
-                                    if (res != null && res.equals("RESPONSE"))
+                                    Message msg = readMessage(socket);
+                                    
+//                                    System.err.println(msg.toString());
+//                                    Utils.printMap(System.err, waitingMsgs);
+//                                    Utils.printMap(System.err, responseMsgs);
+                                    
+                                    String res = msg.getParam(Message.PARAM_STATE);
+                                    if (res != null && res.equals(Message.STATE_RESPONSE))
                                     {
-                                        String uuid = msg.getParam("#MSG_UUID");
-                                        responseMsg.put(uuid, msg);
-                                        Message orgMsg = waitingThreads.get(uuid);
+                                        String uuid = msg.getParam(Message.PARAM_MSG_UUID);
+                                        Message orgMsg = waitingMsgs.get(uuid);
+                                        responseMsgs.put(uuid, msg);
                                         synchronized (orgMsg)
                                         {
                                             orgMsg.notify();
@@ -84,9 +86,34 @@ public class Communicable
     {
     }
 
-    public void sendMessage(String host, int port, Message msg) throws IOException
+    /**
+     * Read a message object from the given socket
+     * @param socket
+     * @return
+     * @throws ClassNotFoundException
+     * @throws IOException 
+     */
+    private Message readMessage(Socket socket) throws ClassNotFoundException, IOException
+    {
+        ObjectInputStream os = new ObjectInputStream(socket.getInputStream());
+        Message msg = (Message) os.readObject();
+        msg.setParam(Message.PARAM_FROM, socket.getInetAddress().getHostAddress());
+        msg.setParam(Message.PARAM_FROM_PORT, socket.getPort());
+        return msg;
+    }
+    
+    private void prepareMsg(Message msg)
     {
         msg.addParamFromMsg(templateMsg);
+        if(!msg.hasParam(Message.PARAM_NEED_RESPONSE))
+        {
+            msg.setParam(Message.PARAM_NEED_RESPONSE, false);
+        }
+    }
+    
+    public void sendMessage(String host, int port, Message msg) throws IOException
+    {
+        prepareMsg(msg);
         Socket s = new Socket(host, port);
         ObjectOutputStream os = new ObjectOutputStream(s.getOutputStream());
         os.writeObject(msg);
@@ -109,29 +136,39 @@ public class Communicable
         this.templateMsg.setParam(key, val);
     }
 
-    public Message sendForResponseSync(String targetHost, int targetPort, int responsePort, Message msg) throws IOException
+    /**
+     * 
+     * @param targetHost
+     * @param targetPort
+     * @param responsePort
+     * @param msg
+     * @param isSync block until the response message is returned or not
+     * @return
+     * @throws IOException 
+     */
+    private Message sendForResponse(String targetHost, int targetPort, int responsePort, Message msg, boolean isSync) throws IOException
     {
         String uuid = Utils.uuid();
-        msg.setParam("#MSG_UUID", uuid);
-        msg.setParam("#STATE", "REQUEST");
-        msg.setParam("#RESPONSE_PORT", responsePort);
-        waitingThreads.put(uuid, msg);
+        waitingMsgs.put(uuid, msg);
+        msg.setParam(Message.PARAM_NEED_RESPONSE, true);
+        msg.setParam(Message.PARAM_MSG_UUID, uuid);
+        msg.setParam(Message.PARAM_STATE, Message.STATE_REQUEST);
+        msg.setParam(Message.PARAM_RESPONSE_PORT, responsePort);
         sendMessage(targetHost, targetPort, msg);
-
-        synchronized (msg)
+        
+        if(!isSync)
         {
-            try
-            {
-                msg.wait();
-            }
-            catch (InterruptedException ex)
-            {
-                Logger.getLogger(Communicable.class.getName()).log(Level.SEVERE, null, ex);
-            }
+            return null;
         }
-        Message respMsg = responseMsg.get(uuid);
-        responseMsg.remove(uuid);
-        return respMsg;
+        else
+        {
+            return getResponseMessage(msg, false);
+        }
+    }
+    
+    public Message sendForResponseSync(String targetHost, int targetPort, int responsePort, Message msg) throws IOException
+    {
+        return sendForResponse(targetHost, targetPort, responsePort, msg, true);
     }
 
     
@@ -153,12 +190,7 @@ public class Communicable
      */
     public void sendForResponseAsync(String targetHost, int targetPort, int responsePort, Message msg) throws IOException
     {
-        String uuid = Utils.uuid();
-        msg.setParam("#MSG_UUID", uuid);
-        msg.setParam("#STATE", "REQUEST");
-        msg.setParam("#RESPONSE_PORT", responsePort);
-        waitingThreads.put(uuid, msg);
-        sendMessage(targetHost, targetPort, msg);
+        sendForResponse(targetHost, targetPort, responsePort, msg, false);
     }
 
     /**
@@ -175,18 +207,22 @@ public class Communicable
     {
         sendForResponseAsync(target.getHost(), target.getPort(), responsePort, msg);
     }
-
+    
     /**
      * Wait and get response message of sending from sendForResponseAsync method
-     *
-     * @param sentMsg
-     * @return
-     * @throws InterruptedException
+     * @param sentMsg request message to get the response for
+     * @param checkExisting whether the method should check the existing of sent message
+     * @return 
      */
-    public Message getResponseMessage(Message sentMsg)
+    
+    private Message getResponseMessage(Message sentMsg, boolean checkExisting)
     {
-        String uuid = sentMsg.getParam("#MSG_UUID");
-        if (!responseMsg.containsKey(uuid))
+        String uuid = sentMsg.getParam(Message.PARAM_MSG_UUID);
+        if(checkExisting && !waitingMsgs.containsKey(uuid))
+        {
+            return null;
+        }
+        if (!responseMsgs.containsKey(uuid))
         {
             synchronized (sentMsg)
             {
@@ -200,9 +236,23 @@ public class Communicable
                 }
             }
         }
-        Message respMsg = responseMsg.get(uuid);
-        responseMsg.remove(uuid);
+        Message respMsg = responseMsgs.get(uuid);
+        responseMsgs.remove(uuid);
+        waitingMsgs.remove(uuid);
         return respMsg;
+    }
+
+    /**
+     * Wait and get response message of sending from sendForResponseAsync method
+     *
+     * @param sentMsg
+     * @return response Message or null if the given message is not in 
+     * the waiting list
+     * @throws InterruptedException
+     */
+    public Message getResponseMessage(Message sentMsg)
+    {
+        return getResponseMessage(sentMsg, true);
     }
 
     /**
@@ -213,8 +263,19 @@ public class Communicable
      */
     public void sendResponseMsg(Message original, Message response) throws IOException
     {
-        response.setParam("#STATE", "RESPONSE");
-        response.setParam("#MSG_UUID", original.getParam("#MSG_UUID"));
-        sendMessage(original.getParam("FROM"), original.getIntParam("#RESPONSE_PORT"), response);
+        response.setParam(Message.PARAM_STATE, Message.STATE_RESPONSE);
+        response.setParam(Message.PARAM_MSG_UUID, original.getParam(Message.PARAM_MSG_UUID));
+        sendMessage(original.getParam(Message.PARAM_FROM), original.getIntParam(Message.PARAM_RESPONSE_PORT), response);
+    }
+    
+    /**
+     * Send empty response message as acknowledgment message
+     * @param original original message
+     * @throws IOException 
+     */
+    public void sendEmptyResponseMsg(Message original) throws IOException
+    {
+        Message response = new Message(Message.TYPE_RESPONSE);
+        sendResponseMsg(original, response);
     }
 }

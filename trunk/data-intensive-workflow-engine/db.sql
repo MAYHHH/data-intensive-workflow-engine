@@ -3,7 +3,7 @@
 -- http://www.phpmyadmin.net
 --
 -- Host: localhost
--- Generation Time: Jul 12, 2013 at 04:03 PM
+-- Generation Time: Jul 15, 2013 at 10:42 AM
 -- Server version: 5.5.29-0ubuntu0.12.04.1
 -- PHP Version: 5.3.10-1ubuntu3.5
 
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `exec_site` (
   `hostname` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
   `port` int(6) NOT NULL,
   PRIMARY KEY (`esid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=20 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
 
 -- --------------------------------------------------------
 
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS `exec_site_file` (
   `esid` int(11) NOT NULL,
   `fid` int(11) NOT NULL,
   PRIMARY KEY (`esfid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=323 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=15 ;
 
 -- --------------------------------------------------------
 
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS `file` (
   `estsize` double NOT NULL DEFAULT '0',
   `file_type` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
   PRIMARY KEY (`fid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1234 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=17 ;
 
 -- --------------------------------------------------------
 
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS `schedule` (
   `tid` int(11) NOT NULL,
   `wkid` int(11) NOT NULL,
   PRIMARY KEY (`sid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=274 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=14 ;
 
 -- --------------------------------------------------------
 
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS `worker` (
   `esp_port` int(11) NOT NULL DEFAULT '-1',
   PRIMARY KEY (`wkid`),
   UNIQUE KEY `uuid` (`uuid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=27 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
 
 -- --------------------------------------------------------
 
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS `workflow` (
   `start` int(11) NOT NULL DEFAULT '-1',
   `finish` int(11) NOT NULL DEFAULT '-1',
   PRIMARY KEY (`wfid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=117 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
 
 -- --------------------------------------------------------
 
@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS `workflow` (
 CREATE TABLE IF NOT EXISTS `workflow_task` (
   `tid` int(11) NOT NULL AUTO_INCREMENT,
   `wfid` int(11) NOT NULL,
+  `namespace` varchar(255) NOT NULL DEFAULT '',
   `name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
   `cmd` text CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
   `status` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL COMMENT '''W''aiting, ''E''xecuting, ''C''ompleted, ''S''uspended, ''F''ail',
@@ -129,7 +130,7 @@ CREATE TABLE IF NOT EXISTS `workflow_task` (
   `exit_value` int(11) NOT NULL DEFAULT '-1',
   PRIMARY KEY (`tid`),
   UNIQUE KEY `wfid` (`wfid`,`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=354 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=14 ;
 
 -- --------------------------------------------------------
 
@@ -143,7 +144,7 @@ CREATE TABLE IF NOT EXISTS `workflow_task_depen` (
   `child` int(11) NOT NULL,
   `wfid` int(11) NOT NULL,
   PRIMARY KEY (`wtdid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=549 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=21 ;
 
 -- --------------------------------------------------------
 
@@ -157,7 +158,7 @@ CREATE TABLE IF NOT EXISTS `workflow_task_file` (
   `tid` int(11) NOT NULL,
   `fid` int(11) NOT NULL,
   PRIMARY KEY (`wtfid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1072 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=38 ;
 
 -- --------------------------------------------------------
 
