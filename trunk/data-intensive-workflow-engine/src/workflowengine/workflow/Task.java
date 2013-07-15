@@ -25,14 +25,14 @@ public class Task implements Serializable
     private int id;
     private String workflowName;
     private int wfdbid;
-//    private Workflow wf;
     private String name = "";
     private double operations;//Represent estimated execution time
     private HashMap<String, Object> objProps = new HashMap<>();
     private int dbid = -1;
-    private char status = 'W'; // 'W'aiting, 'E'xecuting, 'C'ompleted
+    private char status = STATUS_WAITING;
+    private String namespace;
     private String cmd;
-    private Task(String name, double operations, Workflow wf, String cmd)
+    private Task(String name, double operations, Workflow wf, String cmd, String namespace)
     {
         this.name = name;
         this.operations = operations;
@@ -40,9 +40,10 @@ public class Task implements Serializable
         this.workflowName = wf.getName();
         this.wfdbid = wf.getDbid();
         this.cmd = cmd;
+        this.namespace = namespace;
     }
 
-    private Task(String name, double operations, String workflowName, int wfdbid, String cmd, int dbid)
+    private Task(String name, double operations, String workflowName, int wfdbid, String cmd, String namespace, int dbid)
     {
         this.name = name;
         this.workflowName = workflowName;
@@ -50,14 +51,15 @@ public class Task implements Serializable
         this.operations = operations;
         this.dbid = dbid;
         this.cmd = cmd;
+        this.namespace = namespace;
     }
     
-    public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd)
+    public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd, String namespace)
     {
         Task t = getWorkflowTaskFromDB(name, wf.getName());
         if(t == null)
         {
-            t = new Task(name, operations, wf, cmd);
+            t = new Task(name, operations, wf, cmd, namespace);
             t.insert();
         }
         return t;
@@ -68,10 +70,18 @@ public class Task implements Serializable
         try
         {
             DBRecord r = DBRecord.select("workflow_task",
-                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status "
+                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status, t.namespace "
                     + " FROM workflow_task t JOIN workflow w ON t.wfid = w.wfid "
                     + " WHERE t.name='" + wfname+":"+name + "'").get(0);
-            Task t = new Task(r.get("name"), r.getDouble("estopr"), r.get("wname"), r.getInt("wfid"), r.get("cmd"), r.getInt("tid"));
+            Task t = new Task(
+                    r.get("name"), 
+                    r.getDouble("estopr"), 
+                    r.get("wname"), 
+                    r.getInt("wfid"), 
+                    r.get("cmd"), 
+                    r.get("namespace"), 
+                    r.getInt("tid")
+            );
             t.status = r.get("status").charAt(0);
             return t;
         }
@@ -85,10 +95,18 @@ public class Task implements Serializable
         try
         {
             DBRecord r = DBRecord.select("workflow_task",
-                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status "
+                    "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status, t.namespace "
                     + " FROM workflow_task t JOIN workflow w ON t.wfid = w.wfid "
                     + " WHERE t.tid='" + dbid + "'").get(0);
-            Task t = new Task(r.get("name"), r.getDouble("estopr"), r.get("wname"), r.getInt("wfid"), r.get("cmd"), r.getInt("tid"));
+            Task t = new Task(
+                    r.get("name"), 
+                    r.getDouble("estopr"), 
+                    r.get("wname"), 
+                    r.getInt("wfid"), 
+                    r.get("cmd"), 
+                    r.get("namespace"), 
+                    r.getInt("tid")
+            );
             t.status = r.get("status").charAt(0);
             return t;
         }
@@ -127,7 +145,8 @@ public class Task implements Serializable
                     "name", toString(), 
                     "status", status, 
                     "estopr", operations,
-                    "cmd", cmd
+                    "cmd", cmd,
+                    "namespace", namespace
             );
             dbid = rec.insert();
         }
@@ -173,6 +192,13 @@ public class Task implements Serializable
     {
         return toString();
     }
+
+    public String getNamespace()
+    {
+        return namespace;
+    }
+    
+    
 
     public String getEdgeName(Task to)
     {

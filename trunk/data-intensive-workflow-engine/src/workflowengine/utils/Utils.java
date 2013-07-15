@@ -5,6 +5,8 @@
 package workflowengine.utils;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileFilter;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -106,7 +108,6 @@ public class Utils
         {
             return null;
         }
-        
     }
     public static boolean exec(String[] cmds)
     {
@@ -118,6 +119,29 @@ public class Utils
         catch (IOException ex)
         {
             return false;
+        }
+    }
+    
+    public static boolean isFileExist(String path)
+    {
+        return new File(path).exists();
+    }
+    public static void setExecutable(String path)
+    {
+        new File(path).setExecutable(true);
+    }
+    public static void setExecutableInDirSince(String dirPath, final long since)
+    {
+        File[] files = new File(dirPath).listFiles(new FileFilter() {
+            @Override
+            public boolean accept(File pathname)
+            {
+                return pathname.lastModified() > since;
+            }
+        });
+        for(File f : files)
+        {
+            f.setExecutable(true);
         }
     }
 }
