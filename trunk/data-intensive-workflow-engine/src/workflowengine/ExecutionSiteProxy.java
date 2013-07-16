@@ -7,6 +7,8 @@ package workflowengine;
 import com.zehon.exception.FileTransferException;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
@@ -30,52 +32,67 @@ public class ExecutionSiteProxy
         @Override
         public void handleMessage(Message msg)
         {
-            HostAddress target = managerAddr;
-            try
+            switch (msg.getType())
             {
-                HostAddress workerAddr;
-                switch (msg.getType())
-                {
-                    //From manager to executor
-                    case Message.TYPE_DISPATCH_TASK:
-                    case Message.TYPE_GET_NODE_STATUS:
-                    case Message.TYPE_SUSPEND_TASK:
-                    case Message.TYPE_RESPONSE_TO_WORKER:
-                        workerAddr = workerMap.get(msg.getParam(Message.PARAM_WORKER_UUID));
-                        target = workerAddr;
-                        comm.sendMessage(workerAddr, msg);
-                        break;
+                //From manager to executor
+                case Message.TYPE_DISPATCH_TASK:
+                case Message.TYPE_GET_NODE_STATUS:
+                case Message.TYPE_SUSPEND_TASK:
+                case Message.TYPE_RESPONSE_TO_WORKER:
+                    forwardMsgToWorker(msg);
+                    break;
 
-                    //From executor to manager
-                    case Message.TYPE_UPDATE_TASK_STATUS:
-                    case Message.TYPE_UPDATE_NODE_STATUS:
-                    case Message.TYPE_SUBMIT_WORKFLOW:
-                    case Message.TYPE_SUSPEND_TASK_COMPLETE:
-                    case Message.TYPE_REGISTER_FILE:
-                    case Message.TYPE_RESPONSE_TO_MANAGER:
-                        String uuid = msg.getParam(Message.PARAM_WORKER_UUID);
-                        workerAddr = workerMap.get(uuid);
-                        if (workerAddr == null)
-                        {
-                            workerAddr = new HostAddress(msg.getParam(Message.PARAM_FROM), msg.getIntParam(Message.PARAM_WORKER_PORT));
-                            workerMap.put(uuid, workerAddr);
-                        }
-                        msg.setParam(Message.PARAM_WORKER_ADDRESS, workerAddr);
-                        msg.setParam(Message.PARAM_ESP_ADDRESS, addr);
-                        target = managerAddr;
-                        comm.sendMessage(managerAddr, msg);
-                        break;
-                    case Message.TYPE_FILE_UPLOAD_REQUEST:
-                        uploadFile(msg);
-                        break;
-                }
-            }
-            catch (IOException ex)
-            {
-                logger.log("Cannot sent message to " + target + ": " + ex.getMessage(), ex);
+                //From executor to manager
+                case Message.TYPE_UPDATE_TASK_STATUS:
+                case Message.TYPE_UPDATE_NODE_STATUS:
+                case Message.TYPE_SUBMIT_WORKFLOW:
+                case Message.TYPE_SUSPEND_TASK_COMPLETE:
+                case Message.TYPE_REGISTER_FILE:
+                case Message.TYPE_RESPONSE_TO_MANAGER:
+                    forwardMsgToManager(msg);
+                    break;
+                    
+                //From manager to ESP
+                case Message.TYPE_FILE_UPLOAD_REQUEST:
+                    uploadFile(msg);
+                    break;
             }
         }
     };
+    
+    private void forwardMsgToWorker(Message msg)
+    {
+        HostAddress workerAddr = workerMap.get(msg.getParam(Message.PARAM_WORKER_UUID));
+        try
+        {
+            comm.sendMessage(workerAddr, msg);
+        }
+        catch (IOException ex)
+        {
+            logger.log("Cannot sent message to " + workerAddr + ": " + ex.getMessage(), ex);
+        }
+    }
+    
+    private void forwardMsgToManager(Message msg)
+    {
+        String uuid = msg.getParam(Message.PARAM_WORKER_UUID);
+        HostAddress workerAddr = workerMap.get(uuid);
+        if (workerAddr == null)
+        {
+            workerAddr = new HostAddress(msg.getParam(Message.PARAM_FROM), msg.getIntParam(Message.PARAM_WORKER_PORT));
+            workerMap.put(uuid, workerAddr);
+        }
+        msg.setParam(Message.PARAM_WORKER_ADDRESS, workerAddr);
+        msg.setParam(Message.PARAM_ESP_ADDRESS, addr);
+        try
+        {
+            comm.sendMessage(managerAddr, msg);
+        }
+        catch (IOException ex)
+        {
+            logger.log("Cannot sent message to " + managerAddr + ": " + ex.getMessage(), ex);
+        }
+    }
 
     private ExecutionSiteProxy() throws IOException
     {

@@ -115,10 +115,15 @@ public class Message implements Serializable
         return params.containsKey(s);
     }
     
-    public void addParamFromMsg(Message msg)
+    public void addAllParamsFromMsg(Message msg)
     {
         this.params.putAll(msg.params);
     }
+    public void setParamFromMsg(Message msg, String key)
+    {
+        this.params.put(key, msg.params.get(key));
+    }
+    
     
     @Override
     public String toString()
