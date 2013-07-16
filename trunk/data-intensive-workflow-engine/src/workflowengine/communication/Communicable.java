@@ -18,7 +18,7 @@ import workflowengine.utils.Utils;
 public class Communicable
 {
     private int localPort = 0;
-    private Message templateMsg = new Message(-1);
+    private Message templateMsg = new Message();
     private SynchronizedHashMap<String, Message> waitingMsgs = new SynchronizedHashMap<>();
     private SynchronizedHashMap<String, Message> responseMsgs = new SynchronizedHashMap<>();
 
