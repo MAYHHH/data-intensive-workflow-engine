@@ -113,7 +113,7 @@ public class Communicable
     
     private void prepareMsg(Message msg)
     {
-        msg.addParamFromMsg(templateMsg);
+        msg.addAllParamsFromMsg(templateMsg);
         if(!msg.hasParam(Message.PARAM_NEED_RESPONSE))
         {
             msg.setParam(Message.PARAM_NEED_RESPONSE, false);
@@ -272,6 +272,7 @@ public class Communicable
      */
     public void sendResponseMsg(Message original, Message response) throws IOException
     {
+        response.setParamFromMsg(original, Message.PARAM_WORKER_UUID);
         response.setParam(Message.PARAM_STATE, Message.STATE_RESPONSE);
         response.setParam(Message.PARAM_MSG_UUID, original.getParam(Message.PARAM_MSG_UUID));
         response.setParam(Message.PARAM_RESPONSE_PORT, original.getParam(Message.PARAM_RESPONSE_PORT));
