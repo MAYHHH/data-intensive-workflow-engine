@@ -75,7 +75,8 @@ public class TaskExecutor
         port = (Utils.getIntProp("task_executor_port"));
         uuid = Utils.uuid();
         comm.setLocalPort(port);
-        comm.setTemplateMsgParam("uuid", uuid);
+        comm.setTemplateMsgParam(Message.PARAM_WORKER_UUID, uuid);
+        comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_EXECUTOR);
         comm.startServer();
         startHeartBeat();
     }
@@ -133,7 +134,7 @@ public class TaskExecutor
         response.setParam("current_tid", currentTaskDbid);
         response.setParam("free_memory", getFreeMemory());
         response.setParam("cpu", getCPU());
-        response.setParam("port", this.port);
+        response.setParam(Message.PARAM_WORKER_PORT, this.port);
         try
         {
             if(sync)

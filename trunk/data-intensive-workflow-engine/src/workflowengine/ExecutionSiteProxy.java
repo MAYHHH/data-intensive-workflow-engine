@@ -40,7 +40,7 @@ public class ExecutionSiteProxy
                     case Message.TYPE_DISPATCH_TASK:
                     case Message.TYPE_GET_NODE_STATUS:
                     case Message.TYPE_SUSPEND_TASK:
-                        workerAddr = workerMap.get(msg.getParam("uuid"));
+                        workerAddr = workerMap.get(msg.getParam(Message.PARAM_WORKER_UUID));
                         target = workerAddr;
                         comm.sendMessage(workerAddr, msg);
                         break;
@@ -51,15 +51,15 @@ public class ExecutionSiteProxy
                     case Message.TYPE_SUBMIT_WORKFLOW:
                     case Message.TYPE_SUSPEND_TASK_COMPLETE:
                     case Message.TYPE_REGISTER_FILE:
-                        String uuid = msg.getParam("uuid");
+                        String uuid = msg.getParam(Message.PARAM_WORKER_UUID);
                         workerAddr = workerMap.get(uuid);
                         if (workerAddr == null)
                         {
-                            workerAddr = new HostAddress(msg.getParam(Message.PARAM_FROM), msg.getIntParam("port"));
+                            workerAddr = new HostAddress(msg.getParam(Message.PARAM_FROM), msg.getIntParam(Message.PARAM_WORKER_PORT));
                             workerMap.put(uuid, workerAddr);
                         }
-                        msg.setParam("address", workerAddr);
-                        msg.setParam("esp_address", addr);
+                        msg.setParam(Message.PARAM_WORKER_ADDRESS, workerAddr);
+                        msg.setParam(Message.PARAM_ESP_ADDRESS, addr);
                         target = managerAddr;
                         comm.sendMessage(managerAddr, msg);
                         break;

@@ -76,6 +76,7 @@ public class TaskManager
     {
         addr = new HostAddress(Utils.getPROP(), "task_manager_host", "task_manager_port");
         nearestEsp = new HostAddress(Utils.getPROP(), "nearest_esp_host", "nearest_esp_port");
+        comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_MANAGER);
         comm.setLocalPort(addr.getPort());
         comm.startServer();
     }
@@ -100,16 +101,14 @@ public class TaskManager
 
     synchronized public void updateNodeStatus(Message msg)
     {
-        HostAddress workerAddr = (HostAddress) msg.getObjectParam("address");
-        HostAddress espAddr = (HostAddress) msg.getObjectParam("esp_address");
         Worker.updateWorkerStatus(
-                espAddr,
-                workerAddr,
+                msg.getAddressParam(Message.PARAM_ESP_ADDRESS),
+                msg.getAddressParam(Message.PARAM_WORKER_ADDRESS),
                 msg.getIntParam("current_tid"),
                 msg.getDoubleParam("free_memory"),
                 msg.getDoubleParam("free_space"),
                 msg.getDoubleParam("cpu"),
-                msg.getParam("uuid"));
+                msg.getParam(Message.PARAM_WORKER_UUID));
         
         if(msg.getBooleanParam(Message.PARAM_NEED_RESPONSE))
         {
@@ -131,7 +130,7 @@ public class TaskManager
                 msg.getIntParam("start"),
                 msg.getIntParam("end"),
                 msg.getIntParam("exit_value"),
-                msg.getParam("status").charAt(0));
+                msg.getCharParam("status"));
         char status = msg.getCharParam("status");
         if (status == Task.STATUS_COMPLETED || status == Task.STATUS_FAIL)
         {
