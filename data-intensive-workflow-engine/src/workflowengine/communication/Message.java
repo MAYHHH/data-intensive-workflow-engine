@@ -13,16 +13,16 @@ import java.util.HashMap;
  */
 public class Message implements Serializable
 {
-
+    public static final short TYPE_NONE = -1;
     public static final short TYPE_DISPATCH_TASK = 1;
     public static final short TYPE_GET_NODE_STATUS = 2;
     public static final short TYPE_REGISTER_NODE = 3;
     public static final short TYPE_UPDATE_NODE_STATUS = 4;
     public static final short TYPE_UPDATE_TASK_STATUS = 5;
     public static final short TYPE_SUSPEND_TASK = 6;
-    public static final short TYPE_SUSPEND_TASK_COMPLETE = 9;
-    public static final short TYPE_GET_TASK_STATUS = 7;
-    public static final short TYPE_SUBMIT_WORKFLOW = 8;
+    public static final short TYPE_SUSPEND_TASK_COMPLETE = 7;
+    public static final short TYPE_GET_TASK_STATUS = 8;
+    public static final short TYPE_SUBMIT_WORKFLOW = 9;
     public static final short TYPE_FILE_UPLOAD_REQUEST = 10;
     public static final short TYPE_RESPONSE = 11;
     public static final short TYPE_REGISTER_FILE = 12;
@@ -41,6 +41,11 @@ public class Message implements Serializable
     private int type;
     private HashMap<String, Object> params = new HashMap<>();
 
+    public Message()
+    {
+        this(TYPE_NONE);
+    }
+    
     public Message(int type)
     {
         this.type = type;

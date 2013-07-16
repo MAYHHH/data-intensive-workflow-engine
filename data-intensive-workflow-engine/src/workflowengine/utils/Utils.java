@@ -164,6 +164,7 @@ public class Utils
         {
             pw.println(k+": "+m.get(k));
         }
+        pw.println("----------------");
         pw.flush();
     }
     
