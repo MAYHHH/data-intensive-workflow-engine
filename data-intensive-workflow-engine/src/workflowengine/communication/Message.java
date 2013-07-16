@@ -34,9 +34,17 @@ public class Message implements Serializable
     public static final String PARAM_FROM = "#FROM";
     public static final String PARAM_FROM_PORT = "#FROM_PORT";
     
+    public static final String PARAM_FROM_SOURCE = "#FROM_SOURCE";
+    public static final String PARAM_WORKER_UUID = "uuid";
+    public static final String PARAM_WORKER_ADDRESS = "address";
+    public static final String PARAM_WORKER_PORT = "port";
+    public static final String PARAM_ESP_ADDRESS = "esp_address";
+    
     public static final String STATE_REQUEST = "#REQUEST";
     public static final String STATE_RESPONSE = "#RESPONSE";
     
+    public static final String SOURCE_TASK_MANAGER = "#SOURCE_TASK_MANAGER";
+    public static final String SOURCE_TASK_EXECUTOR = "#SOURCE_TASK_EXECUTOR";
     
     private int type;
     private HashMap<String, Object> params = new HashMap<>();
@@ -70,6 +78,12 @@ public class Message implements Serializable
     public Object getObjectParam(String s)
     {
         return params.get(s);
+    }
+    
+    public HostAddress getAddressParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : (HostAddress)o;
     }
 
     public double getDoubleParam(String s)

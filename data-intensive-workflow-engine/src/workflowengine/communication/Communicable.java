@@ -25,7 +25,6 @@ public class Communicable
     public void startServer() throws IOException
     {
         final ServerSocket server = new ServerSocket(localPort);
-
         new Thread(new Runnable()
         {
             @Override
@@ -44,16 +43,22 @@ public class Communicable
                                 try
                                 {
                                     Message msg = readMessage(socket);
-                                    
+                                    socket.close();
 //                                    System.err.println(msg.toString());
 //                                    Utils.printMap(System.err, waitingMsgs);
 //                                    Utils.printMap(System.err, responseMsgs);
+                                    System.err.println("Received Msg------");
+                                    System.err.println(msg);
+                                    System.err.println("------------------");
                                     
                                     String res = msg.getParam(Message.PARAM_STATE);
                                     if (res != null && res.equals(Message.STATE_RESPONSE))
                                     {
                                         String uuid = msg.getParam(Message.PARAM_MSG_UUID);
                                         Message orgMsg = waitingMsgs.get(uuid);
+                                        System.err.println("Original Msg------");
+                                        System.err.println(orgMsg);
+                                        System.err.println("------------------");
                                         responseMsgs.put(uuid, msg);
                                         synchronized (orgMsg)
                                         {
@@ -64,7 +69,6 @@ public class Communicable
                                     {
                                         handleMessage(msg);
                                     }
-                                    socket.close();
                                 }
                                 catch (IOException | ClassNotFoundException ex)
                                 {
@@ -86,6 +90,7 @@ public class Communicable
     {
     }
 
+    
     /**
      * Read a message object from the given socket
      * @param socket
@@ -95,11 +100,14 @@ public class Communicable
      */
     private Message readMessage(Socket socket) throws ClassNotFoundException, IOException
     {
-        ObjectInputStream os = new ObjectInputStream(socket.getInputStream());
-        Message msg = (Message) os.readObject();
-        msg.setParam(Message.PARAM_FROM, socket.getInetAddress().getHostAddress());
-        msg.setParam(Message.PARAM_FROM_PORT, socket.getPort());
-        return msg;
+        synchronized(socket)
+        {
+            ObjectInputStream os = new ObjectInputStream(socket.getInputStream());
+            Message msg = (Message) os.readObject();
+            msg.setParam(Message.PARAM_FROM, socket.getInetAddress().getHostAddress());
+            msg.setParam(Message.PARAM_FROM_PORT, socket.getPort());
+            return msg;
+        }
     }
     
     private void prepareMsg(Message msg)
@@ -117,7 +125,7 @@ public class Communicable
         Socket s = new Socket(host, port);
         ObjectOutputStream os = new ObjectOutputStream(s.getOutputStream());
         os.writeObject(msg);
-        os.flush();
+        os.close();
         s.close();
     }
 
