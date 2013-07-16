@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.logging.Level;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
@@ -114,7 +113,7 @@ public class TaskManager
         {
             try
             {
-                comm.sendEmptyResponseMsg(msg);
+                comm.sendEmptyResponseMsg(msg, Message.TYPE_RESPONSE_TO_WORKER);
             }
             catch (IOException ex)
             {

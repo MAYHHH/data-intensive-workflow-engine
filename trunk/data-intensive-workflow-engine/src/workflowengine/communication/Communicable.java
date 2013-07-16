@@ -59,6 +59,7 @@ public class Communicable
                                         System.err.println("Original Msg------");
                                         System.err.println(orgMsg);
                                         System.err.println("------------------");
+                                        Utils.printMap(System.err, waitingMsgs);
                                         responseMsgs.put(uuid, msg);
                                         synchronized (orgMsg)
                                         {
@@ -163,7 +164,7 @@ public class Communicable
         msg.setParam(Message.PARAM_STATE, Message.STATE_REQUEST);
         msg.setParam(Message.PARAM_RESPONSE_PORT, responsePort);
         sendMessage(targetHost, targetPort, msg);
-        
+        Utils.printMap(System.err, waitingMsgs);
         if(!isSync)
         {
             return null;
@@ -273,17 +274,21 @@ public class Communicable
     {
         response.setParam(Message.PARAM_STATE, Message.STATE_RESPONSE);
         response.setParam(Message.PARAM_MSG_UUID, original.getParam(Message.PARAM_MSG_UUID));
-        sendMessage(original.getParam(Message.PARAM_FROM), original.getIntParam(Message.PARAM_RESPONSE_PORT), response);
+        response.setParam(Message.PARAM_RESPONSE_PORT, original.getParam(Message.PARAM_RESPONSE_PORT));
+        sendMessage(original.getAddressParam(Message.PARAM_ESP_ADDRESS), response);
+//        sendMessage(original.getParam(Message.PARAM_FROM), original.getIntParam(Message.PARAM_RESPONSE_PORT), response);
     }
     
     /**
      * Send empty response message as acknowledgment message
      * @param original original message
+     * @param msgType message type indicate whether it's to manager or worker.
+     * Only use Message.TYPE_RESPONSE_TO_WORKER or Message.TYPE_RESPONSE_TO_MANAGER 
      * @throws IOException 
      */
-    public void sendEmptyResponseMsg(Message original) throws IOException
+    public void sendEmptyResponseMsg(Message original, short msgType) throws IOException
     {
-        Message response = new Message(Message.TYPE_RESPONSE);
+        Message response = new Message(msgType);
         sendResponseMsg(original, response);
     }
 }

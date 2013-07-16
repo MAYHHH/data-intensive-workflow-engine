@@ -40,6 +40,7 @@ public class ExecutionSiteProxy
                     case Message.TYPE_DISPATCH_TASK:
                     case Message.TYPE_GET_NODE_STATUS:
                     case Message.TYPE_SUSPEND_TASK:
+                    case Message.TYPE_RESPONSE_TO_WORKER:
                         workerAddr = workerMap.get(msg.getParam(Message.PARAM_WORKER_UUID));
                         target = workerAddr;
                         comm.sendMessage(workerAddr, msg);
@@ -51,6 +52,7 @@ public class ExecutionSiteProxy
                     case Message.TYPE_SUBMIT_WORKFLOW:
                     case Message.TYPE_SUSPEND_TASK_COMPLETE:
                     case Message.TYPE_REGISTER_FILE:
+                    case Message.TYPE_RESPONSE_TO_MANAGER:
                         String uuid = msg.getParam(Message.PARAM_WORKER_UUID);
                         workerAddr = workerMap.get(uuid);
                         if (workerAddr == null)
@@ -103,7 +105,7 @@ public class ExecutionSiteProxy
 
     public void uploadFile(Message msg)
     {
-        Message response = new Message(Message.TYPE_RESPONSE);
+        Message response = new Message(Message.TYPE_RESPONSE_TO_MANAGER);
         String filename = msg.getParam("filename");
         String dir = msg.getParam("dir");
         try
