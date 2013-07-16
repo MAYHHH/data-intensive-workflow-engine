@@ -24,8 +24,10 @@ public class Message implements Serializable
     public static final short TYPE_GET_TASK_STATUS = 8;
     public static final short TYPE_SUBMIT_WORKFLOW = 9;
     public static final short TYPE_FILE_UPLOAD_REQUEST = 10;
-    public static final short TYPE_RESPONSE = 11;
+//    public static final short TYPE_RESPONSE = 11;
     public static final short TYPE_REGISTER_FILE = 12;
+    public static final short TYPE_RESPONSE_TO_MANAGER = 13;
+    public static final short TYPE_RESPONSE_TO_WORKER = 14;
     
     public static final String PARAM_NEED_RESPONSE = "#NEED_RESPONSE";
     public static final String PARAM_MSG_UUID = "#MSG_UUID";
