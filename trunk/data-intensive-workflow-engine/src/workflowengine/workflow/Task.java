@@ -214,19 +214,12 @@ public class Task implements Serializable
     {
         return operations;
     }
-
-//    public void addInputFile(WorkflowFile f)
-//    {
-//        inputFiles.put(f.getName(), f);
-//    }
-//
-//    public void addOutputFile(WorkflowFile f)
-//    {
-//        outputFiles.put(f.getName(), f);
-//    }
     public WorkflowFile[] getInputFiles() throws DBException
     {
-        List<DBRecord> results = DBRecord.select("workflow_task_file", new DBRecord("workflow_task_file", "type", "I", "tid", dbid));
+        List<DBRecord> results = DBRecord.select("workflow_task_file", 
+                new DBRecord("workflow_task_file", 
+                "type", "I", 
+                "tid", dbid));
         WorkflowFile[] files = new WorkflowFile[results.size()];
         for (int i=0;i<results.size();i++)
         {
@@ -253,7 +246,10 @@ public class Task implements Serializable
 
     public WorkflowFile[] getOutputFiles() throws DBException
     {
-        List<DBRecord> results = DBRecord.select("workflow_task_file", new DBRecord("workflow_task_file", "type", "O", "tid", dbid));
+        List<DBRecord> results = DBRecord.select("workflow_task_file", 
+                new DBRecord("workflow_task_file", 
+                "type", "O", 
+                "tid", dbid));
         WorkflowFile[] files = new WorkflowFile[results.size()];
         for (int i=0;i<results.size();i++)
         {

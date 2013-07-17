@@ -49,7 +49,7 @@ public class TaskExecutor
     private HostAddress espAddr;
     private int port;
     private double cpu = -1;
-    private Communicable comm = new Communicable(){
+    private Communicable comm = new Communicable("Worker"){
 
         @Override
         public void handleMessage(Message msg)
@@ -122,28 +122,28 @@ public class TaskExecutor
    
     public void updateNodeStatus()
     {
-        updateNodeStatus(true);
+        updateNodeStatus(false);
     }
     
     public void updateNodeStatus(boolean sync)
     {
-        Message response = new Message(Message.TYPE_UPDATE_NODE_STATUS);
-        response.setParam("status", status);
+        Message msg = new Message(Message.TYPE_UPDATE_NODE_STATUS);
+        msg.setParam("status", status);
         File defaultStorage = new File(Utils.getProp("working_dir"));
-        response.setParam("free_space", defaultStorage.getFreeSpace()); //in bytes
-        response.setParam("current_tid", currentTaskDbid);
-        response.setParam("free_memory", getFreeMemory());
-        response.setParam("cpu", getCPU());
-        response.setParam(Message.PARAM_WORKER_PORT, this.port);
+        msg.setParam("free_space", defaultStorage.getFreeSpace()); //in bytes
+        msg.setParam("current_tid", currentTaskDbid);
+        msg.setParam("free_memory", getFreeMemory());
+        msg.setParam("cpu", getCPU());
+        msg.setParam(Message.PARAM_WORKER_PORT, this.port);
         try
         {
             if(sync)
             {
-                comm.sendForResponseSync(espAddr, this.port, response);
+                comm.sendForResponseSync(espAddr, this.port, msg);
             }
             else
             {
-                comm.sendMessage(espAddr, response);
+                comm.sendMessage(espAddr, msg);
             }
         }
         catch (IOException | InterruptedException ex)
@@ -240,6 +240,11 @@ public class TaskExecutor
     private void uploadOutputFiles(Message msg) throws FileTransferException
     {
         WorkflowFile[] files = (WorkflowFile[])msg.getObjectParam("output_files");
+//        System.err.println("output file");
+//        for(WorkflowFile f : files)
+//        {
+//            System.err.println(f.toString());
+//        }
         String remoteDir = msg.getParam("file_dir");
         String espHost = Utils.getProp("exec_site_proxy_host");
         SFTPClient client = SFTPUtils.getSFTP(espHost);
@@ -248,12 +253,15 @@ public class TaskExecutor
             String localFilePath = currentWorkingDir+f.getName();
             if(Utils.isDir(localFilePath))
             {
-                client.createFolder(f.getName(), remoteDir);
-                client.sendFolder(localFilePath, remoteDir, null);
+                String dir = new File(remoteDir+f.getName()).getParent();
+                SFTPUtils.createFolderPath(client, dir);
+                client.sendFolder(localFilePath, dir, null);
             }
             else
             {
-                client.sendFile(localFilePath, remoteDir);
+                String dir = new File(remoteDir+f.getName()).getParent();
+                SFTPUtils.createFolderPath(client, dir);
+                client.sendFile(localFilePath, dir);
             }
         }
         
@@ -370,6 +378,7 @@ public class TaskExecutor
             
             //Wait for the process to complete
             int exitVal = proc.waitFor();
+            logger.log("Execution of task "+currentTaskName+" is finished.");
             
             currentTaskEnd = Utils.time();
             
@@ -395,12 +404,14 @@ public class TaskExecutor
             response.setParam("start", currentTaskStart);
             response.setParam("end", currentTaskEnd);
             response.setParam("exit_value", exitVal);
-            logger.log("Execution of task "+currentTaskName+" is finished.");
-            
+            logger.log("Uploading output file from task "+currentTaskName+"...");
             uploadOutputFiles(msg);
+            logger.log("Done.");
             
             setIdle();
+            logger.log("Updating node status and wait for acknowledgment...");
             updateNodeStatus(true);
+            logger.log("Done.");
             comm.sendMessage(espAddr, response);
         }
         catch (IOException | InterruptedException | FileTransferException ex) 
