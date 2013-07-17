@@ -66,5 +66,23 @@ public class Event implements Comparable<Event>
         }
     }
     
-    
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder();
+        switch(type)
+        {
+            case TYPE_FILE_SENT:
+                sb.append("FILE_SENT ");
+                break;
+            case TYPE_TASK_FIN:
+                sb.append("TASK_FIN ");
+                break;
+        }
+        sb.append(time).append(": ");
+        for(String k : hmap.keySet())
+        {
+            sb.append(k).append("=").append(hmap.get(k)).append(", ");
+        }
+        return sb.toString();
+    }
 }

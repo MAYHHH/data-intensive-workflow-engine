@@ -3,6 +3,7 @@ package vseesim;
 
 import java.util.HashMap;
 import java.util.PriorityQueue;
+import java.util.Random;
 
 /**
  *
@@ -11,10 +12,14 @@ import java.util.PriorityQueue;
 public class Vseesim
 {
     static PriorityQueue<Event> eq = new PriorityQueue<>();
-    static HashMap<Partition,Machine> hm= new HashMap<>();
-    static double time;
-    static double latency;
-    static double bandWidth;
+    static HashMap<Partition,Machine> partitionMapping= new HashMap<>();
+    static double simTime;
+    static double LATENCY_MEAN = 1;
+    static double LATENCY_SD = 0.3;
+    static double BANDWIDTH_MEAN = 10;
+    static double BANDWIDTH_SD = 3;
+    static Random RANDOM = new Random();
+    
     
     public static void init()
     {
@@ -23,28 +28,68 @@ public class Vseesim
         //TODO: schedule workflow
         //TODO: workflow partitioning
         scheduleNextTaskFinishEvent();
+        run();
     }
     
     public static void run()
     {
-        Event e = eq.poll();
-        time = e.getTime();
-        switch(e.getType())
+        Event e ;
+        while((e = eq.poll()) != null)
         {
-            case Event.TYPE_FILE_SENT:
-                scheduleNextTaskFinishEvent();
-                break;
-            case Event.TYPE_TASK_FIN:
-                Event newEvent = new Event(Event.TYPE_FILE_SENT);
-                Partition p = (Partition)e.getProperty("Partition");
-                newEvent.setTime(time+(1*latency+(p.getOutputsize()/bandWidth)));
-                eq.add(newEvent);
-                break;
-            
+            simTime = e.getTime();
+            switch(e.getType())
+            {
+                case Event.TYPE_FILE_SENT:
+                    System.out.println(e);
+                    Machine to = (Machine)e.getProperty("to_machine");
+                    to.addSnapshot((Snapshot)e.getProperty("snapshot"));
+                    scheduleNextTaskFinishEvent();
+                    break;
+                case Event.TYPE_TASK_FIN:
+                    System.out.println(e);
+                    Partition p = (Partition)e.getProperty("Partition");
+                    Machine m = (Machine)e.getProperty("Machine");
+                    m.addSnapshot(p.getSnapshot());
+                    p.setFinished(true);
+                    partitionMapping.remove(p);
+                    scheduleFileSentFromPartition(p, m);
+                    scheduleNextTaskFinishEvent();
+                    break;
+            }
+        }
+        System.out.println("No more event. Simulation is stopped."+simTime);
+    }
+    
+    public static void scheduleFileSentFromPartition(Partition par, Machine curM)
+    {
+        double finishTime = simTime;
+        for(Partition p : par.children)
+        {
+            Machine m = partitionMapping.get(p);
+            if(curM.equals(m))
+            {
+                continue;
+            }
+            Event e = new Event(Event.TYPE_FILE_SENT);
+            e.setProperty("from_machine", curM);
+            e.setProperty("to_machine", m);
+            e.setProperty("snapshot", par.getSnapshot());
+            finishTime += m.getTransferTime(par.getSnapshot());
+            e.setTime(finishTime);
+            eq.add(e);
         }
     }
+    
     public static Partition getReadyPartition()
     {
+        for(Partition p : partitionMapping.keySet())
+        {
+            Machine m = partitionMapping.get(p);
+            if(!p.isExecuting() && p.hasParentSnapshotsOn(m))
+            {
+                return p;
+            }
+        }
         return null;
     }
     public static void scheduleNextTaskFinishEvent()
@@ -52,16 +97,44 @@ public class Vseesim
         Partition p;
         while((p = getReadyPartition()) != null)
         {
+            p.setExecuting(true);
             Event e = new Event(Event.TYPE_TASK_FIN);
-            Machine m = hm.get(p);
+            Machine m = partitionMapping.get(p);
             e.setProperty("Partition", p);
             e.setProperty("Machine", m);
-            e.setTime(time+p.calExecutionTime(m));
+            e.setTime(simTime+m.getExecTime(p));
             eq.add(e);
         }
     }
     public static void main(String[] args)
     {
-        // TODO code application logic here
+        Partition p1 = new Partition();
+        Partition p2 = new Partition();
+        Partition p3 = new Partition();
+        Partition p4 = new Partition();
+        Partition p5 = new Partition();
+        p1.setWorkload(RANDOM.nextInt(2000)+500);
+        p2.setWorkload(RANDOM.nextInt(2000)+500);
+        p3.setWorkload(RANDOM.nextInt(2000)+500);
+        p4.setWorkload(RANDOM.nextInt(2000)+500);
+        p5.setWorkload(RANDOM.nextInt(2000)+500);
+        p1.addChild(p2);
+        p1.addChild(p3);
+        p2.addChild(p4);
+        p4.addChild(p5);
+        p3.addChild(p5);
+        p1.setSnapshot(new Snapshot(100));
+        p2.setSnapshot(new Snapshot(200));
+        p3.setSnapshot(new Snapshot(300));
+        p4.setSnapshot(new Snapshot(400));
+        p5.setSnapshot(new Snapshot(500));
+        Machine m1 = new Machine();
+        Machine m2 = new Machine();
+        partitionMapping.put(p1, m1);
+        partitionMapping.put(p2, m2);
+        partitionMapping.put(p3, m1);
+        partitionMapping.put(p4, m2);
+        partitionMapping.put(p5, m1);
+        init();
     }
 }
