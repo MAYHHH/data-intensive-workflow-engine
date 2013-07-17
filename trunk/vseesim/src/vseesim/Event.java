@@ -15,6 +15,12 @@ public class Event implements Comparable<Event>
     private int time;
     private int type;
 
+    public Event(int type)
+    {
+        this.type = type;
+    }
+    
+
     public Event(int time, int type)
     {
         this.time = time;
@@ -24,6 +30,11 @@ public class Event implements Comparable<Event>
     public int getTime()
     {
         return time;
+    }
+    
+    public void setTime(int time)
+    {
+        this.time = time;
     }
     
     public int getType()
