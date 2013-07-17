@@ -16,24 +16,37 @@ public class Vseesim
     
     public static void init()
     {
-        Event e = new Event(Event.TYPE_TASK_FIN);
-        Partition p = getReadyPartition();
-        Machine m = hm.get(p);
-        e.setProperty("Partition", p);
-        e.setProperty("Machine", m);
-        e.setTime(time+p.calExecutionTime(m));
-        eq.add(e);
-        
-        
+        //TODO: init workflow
+        //TODO: init machines
+        //TODO: schedule workflow
+        //TODO: workflow partitioning
+        scheduleNextTaskFinishEvent();
     }
     
     public static void run()
     {
-        
+        Event e = eq.poll();
+        switch(e.getType())
+        {
+            
+        }
     }
     public static Partition getReadyPartition()
     {
         return null;
+    }
+    public static void scheduleNextTaskFinishEvent()
+    {
+        Partition p;
+        while((p = getReadyPartition()) != null)
+        {
+            Event e = new Event(Event.TYPE_TASK_FIN);
+            Machine m = hm.get(p);
+            e.setProperty("Partition", p);
+            e.setProperty("Machine", m);
+            e.setTime(time+p.calExecutionTime(m));
+            eq.add(e);
+        }
     }
     public static void main(String[] args)
     {
