@@ -14,4 +14,9 @@ public class Partition
     {
         return 1;
     }
+    
+    public double getOutputsize()
+    {
+        return 0;
+    }
 }
