@@ -37,6 +37,6 @@ public class SubmitWorkflow
         
         String host = Utils.getProp("task_manager_host");
         int port = Utils.getIntProp("task_manager_port");
-        new Communicable().sendMessage(host, port, msg);
+        new Communicable("Workflow Submitor").sendMessage(host, port, msg);
     }
 }

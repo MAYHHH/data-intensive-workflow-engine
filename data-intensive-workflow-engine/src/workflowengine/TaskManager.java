@@ -5,12 +5,12 @@
 package workflowengine;
 
 import com.zehon.exception.FileTransferException;
-import com.zehon.sftp.SFTPClient;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Level;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
@@ -45,7 +45,8 @@ public class TaskManager
     private Properties p = new Properties();
     private int suspendCount = -1;
     private int workerCount = -1;
-    private Communicable comm = new Communicable()
+    private int dispatchCheckInterval = 15000;
+    private Communicable comm = new Communicable("Task Manager")
     {
         @Override
         public void handleMessage(Message msg)
@@ -78,6 +79,7 @@ public class TaskManager
         comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_MANAGER);
         comm.setLocalPort(addr.getPort());
         comm.startServer();
+//        startDispatchThread();
     }
 
     public static TaskManager startService()
@@ -97,23 +99,48 @@ public class TaskManager
             return null;
         }
     }
-
-    synchronized public void updateNodeStatus(Message msg)
+    
+    private void startDispatchThread()
     {
+        new Thread(new Runnable() {
+
+            @Override
+            public void run()
+            {
+                while (true)
+                {
+                    dispatchTask();
+                    try
+                    {
+                        Thread.sleep(dispatchCheckInterval);
+                    }
+                    catch (InterruptedException ex)
+                    {
+                        logger.log("Cannot sleep for dispatching task.", ex);
+                    }
+                }
+            }
+        }).start();
+    }
+
+    public void updateNodeStatus(Message msg)
+    {
+        HostAddress espAddr = msg.getAddressParam(Message.PARAM_ESP_ADDRESS);
         Worker.updateWorkerStatus(
-                msg.getAddressParam(Message.PARAM_ESP_ADDRESS),
+                espAddr,
                 msg.getAddressParam(Message.PARAM_WORKER_ADDRESS),
                 msg.getIntParam("current_tid"),
                 msg.getDoubleParam("free_memory"),
                 msg.getDoubleParam("free_space"),
                 msg.getDoubleParam("cpu"),
                 msg.getParam(Message.PARAM_WORKER_UUID));
-        
         if(msg.getBooleanParam(Message.PARAM_NEED_RESPONSE))
         {
             try
             {
-                comm.sendEmptyResponseMsg(msg, Message.TYPE_RESPONSE_TO_WORKER);
+                Message response = new Message(Message.TYPE_RESPONSE_TO_WORKER);
+                response.setParamFromMsg(msg, Message.PARAM_WORKER_UUID);
+                comm.sendResponseMsg(espAddr, msg, response);
             }
             catch (IOException ex)
             {
@@ -122,7 +149,7 @@ public class TaskManager
         }
     }
 
-    synchronized public void updateTaskStatus(Message msg)
+    public void updateTaskStatus(Message msg)
     {
         Task.updateTaskStatus(
                 msg.getIntParam("tid"),
@@ -190,16 +217,11 @@ public class TaskManager
         List<WorkflowFile> files = w.getInputFiles();
         for (WorkflowFile f : files)
         {
-            insertFileToEsp(f.getDbid());
+            insertFileToEsp(f.getDbid(), nearestEsp);
         }
         execWorkflow(w);
     }
 
-    private void insertFileToEsp(int fid)
-    {
-        insertFileToEsp(fid, nearestEsp);
-    }
-    
     private void insertFileToEsp(int fid, HostAddress espAddr)
     {
         int esid = new DBRecord("exec_site",
@@ -214,16 +236,19 @@ public class TaskManager
     {
         logger.log("Scheduling the workflow " + wf.getName() + ".");
         Schedule schedule;
+        
+        //Synchronized to shedule one workflow at a time
         synchronized (this)
         {
             schedule = sch.getSchedule(new SchedulerSettings(wf, getExecSite()));
         }
+        
         setScheduleForWorkflow(wf, schedule);
         logger.log("Workflow " + wf.getName() + " is scheduled.");
         dispatchTask();
     }
 
-    synchronized public void updateScheduleForWorkflow(Workflow wf, Schedule schedule) throws DBException
+    public void updateScheduleForWorkflow(Workflow wf, Schedule schedule) throws DBException
     {
         for (Task t : wf.getTaskIterator())
         {
@@ -232,7 +257,7 @@ public class TaskManager
         }
     }
 
-    synchronized public void setScheduleForWorkflow(Workflow wf, Schedule schedule) throws DBException
+    public void setScheduleForWorkflow(Workflow wf, Schedule schedule) throws DBException
     {
         for (Task t : wf.getTaskIterator())
         {
@@ -241,7 +266,10 @@ public class TaskManager
         }
     }
 
-    public void dispatchTask()
+    /**
+     * Dispatch any ready tasks
+     */
+    synchronized public void dispatchTask()
     {
         List<DBRecord> results = DBRecord.select("_task_to_dispatch", new DBRecord());
         for (DBRecord res : results)
@@ -255,7 +283,7 @@ public class TaskManager
             msg.setParam("task_namespace", t.getNamespace());
             msg.setParam("tid", t.getDbid());
             msg.setParam("wfid", t.getWfdbid());
-            msg.setParam("uuid", r.get("uuid"));
+            msg.setParam(Message.PARAM_WORKER_UUID, r.get("uuid"));
             msg.setParam("input_files", t.getInputFiles());
             msg.setParam("file_dir", dir);
             msg.setParam("output_files", t.getOutputFiles());
@@ -264,6 +292,10 @@ public class TaskManager
                 msg.setParam("migrate", "migrate");
             }
 
+            /**
+             * Start new thread for each task dispatching to transfer input files
+             * parallelly.
+             */
             new Thread(new Runnable()
             {
                 @Override
@@ -272,9 +304,11 @@ public class TaskManager
                     try
                     {
                         logger.log("Uploading input files for task " + t.getName() + " to " + r.get("uuid") + "...");
-                        uploadInputFilesToEspForTask(t, r.get("esp_hostname"));
+                        uploadInputFilesForTaskToEsp(t, r.get("esp_hostname"));
+                        logger.log("Done.");
                         logger.log("Dispatching task " + t.getName() + " to " + r.get("uuid") + "...");
                         comm.sendMessage(r.get("esp_hostname"), r.getInt("esp_port"), msg);
+                        logger.log("Done.");
                         Task.updateTaskStatus(t.getDbid(), -1, -1, -1, Task.STATUS_DISPATCHED);
                     }
                     catch (IOException | FileTransferException ex)
@@ -295,25 +329,36 @@ public class TaskManager
      * @param espHost execution site proxy hostname
      * @throws FileTransferException
      */
-    private void uploadInputFilesToEspForTask(Task t, String espHost) throws FileTransferException
+    private void uploadInputFilesForTaskToEsp(Task t, String espHost) throws FileTransferException
     {
+        //Select input files needed by the task t
         List<DBRecord> files = DBRecord.select(
                 "SELECT f.fid, f.name "
                 + "FROM workflow_task_file tf join `file` f on tf.fid = f.fid "
                 + "WHERE `type`='I' AND tid='" + t.getDbid() + "'");
-        SFTPClient sftp = SFTPUtils.getSFTP(espHost);
+//        SFTPClient sftp = SFTPUtils.getSFTP(espHost);
         String dir = Utils.getProp("exec_site_file_storage_dir") + t.getWorkingDirSuffix();
         LinkedList<Message> sentMsgs = new LinkedList<>();
         for (DBRecord f : files)
         {
             String fname = f.get("name");
-            if (!sftp.fileExists(dir, fname))
+            //Whether the file is in the espHost
+            boolean fileExist = DBRecord.select("SELECT fid "
+                    + "FROM exec_site_file esf "
+                    + "JOIN exec_site es ON esf.esid = es.esid "
+                    + "WHERE es.hostname='"+espHost+"' "
+                    + "AND fid = '"+f.get("fid")+"'").size() > 0;
+            if (!fileExist)
             {
                 try
                 {
+                    //Select the execution site that contain the file f
                     DBRecord r = DBRecord.select("SELECT hostname, port "
                             + "FROM exec_site_file esf JOIN exec_site es ON esf.esid = es.esid "
                             + "WHERE esf.fid = '" + f.get("fid") + "'").get(0);
+                    
+                    //Send message to that execution site to transfer required files
+                    //to espHpst
                     Message msg = new Message(Message.TYPE_FILE_UPLOAD_REQUEST);
                     msg.setParam("filename", fname);
                     msg.setParam("dir", dir);
@@ -382,7 +427,7 @@ public class TaskManager
     public void registerFileInProxy(Message msg)
     {
         WorkflowFile[] wfiles = (WorkflowFile[])msg.getObjectParam("files");
-        HostAddress esp = (HostAddress)msg.getObjectParam("esp_address");
+        HostAddress esp = msg.getAddressParam(Message.PARAM_ESP_ADDRESS);
         for(WorkflowFile f : wfiles)
         {
             insertFileToEsp(f.getDbid(), esp);

@@ -6,13 +6,11 @@ package workflowengine;
 
 import com.zehon.exception.FileTransferException;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
 import workflowengine.utils.SFTPUtils;
+import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
 
 /**
@@ -26,8 +24,8 @@ public class ExecutionSiteProxy
     private HostAddress managerAddr;
     private HostAddress addr;
     private static ExecutionSiteProxy esp = null;
-    private HashMap<String, HostAddress> workerMap = new HashMap<>(); //<uuid, host address>
-    private Communicable comm = new Communicable()
+    private SynchronizedHashMap<String, HostAddress> workerMap = new SynchronizedHashMap<>(); //<uuid, host address>
+    private Communicable comm = new Communicable("Execution Site Proxy")
     {
         @Override
         public void handleMessage(Message msg)
@@ -136,7 +134,7 @@ public class ExecutionSiteProxy
         }
         try
         {
-            comm.sendResponseMsg(msg, response);
+            comm.sendResponseMsg(managerAddr, msg, response);
         }
         catch (IOException ex)
         {

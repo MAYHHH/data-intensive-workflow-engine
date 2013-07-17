@@ -17,11 +17,18 @@ import workflowengine.utils.Utils;
 
 public class Communicable
 {
+    private String name;
     private int localPort = 0;
     private Message templateMsg = new Message();
     private SynchronizedHashMap<String, Message> waitingMsgs = new SynchronizedHashMap<>();
     private SynchronizedHashMap<String, Message> responseMsgs = new SynchronizedHashMap<>();
+    private final String commUUID = Utils.uuid();
 
+    public Communicable(String name)
+    {
+        this.name = name;
+    }
+    
     public void startServer() throws IOException
     {
         final ServerSocket server = new ServerSocket(localPort);
@@ -44,22 +51,13 @@ public class Communicable
                                 {
                                     Message msg = readMessage(socket);
                                     socket.close();
-//                                    System.err.println(msg.toString());
-//                                    Utils.printMap(System.err, waitingMsgs);
-//                                    Utils.printMap(System.err, responseMsgs);
-                                    System.err.println("Received Msg------");
-                                    System.err.println(msg);
-                                    System.err.println("------------------");
                                     
                                     String res = msg.getParam(Message.PARAM_STATE);
-                                    if (res != null && res.equals(Message.STATE_RESPONSE))
+                                    String senderUUID = msg.getParam(Message.PARAM_SOURCE_UUID);
+                                    if (res != null && res.equals(Message.STATE_RESPONSE) && senderUUID.equals(commUUID))
                                     {
-                                        String uuid = msg.getParam(Message.PARAM_MSG_UUID);
+                                        String uuid = msg.getParam(Message.PARAM_RESPONSE_FOR_MSG_UUID);
                                         Message orgMsg = waitingMsgs.get(uuid);
-                                        System.err.println("Original Msg------");
-                                        System.err.println(orgMsg);
-                                        System.err.println("------------------");
-                                        Utils.printMap(System.err, waitingMsgs);
                                         responseMsgs.put(uuid, msg);
                                         synchronized (orgMsg)
                                         {
@@ -107,6 +105,13 @@ public class Communicable
             Message msg = (Message) os.readObject();
             msg.setParam(Message.PARAM_FROM, socket.getInetAddress().getHostAddress());
             msg.setParam(Message.PARAM_FROM_PORT, socket.getPort());
+            
+            if(msg.getBooleanParam(Message.PARAM_PRINT_AFTER_RECEIVE))
+            {
+                System.err.println("-----" + name + "-----");
+                System.err.println(msg);
+                System.err.println("------------------");
+            }
             return msg;
         }
     }
@@ -114,15 +119,22 @@ public class Communicable
     private void prepareMsg(Message msg)
     {
         msg.addAllParamsFromMsg(templateMsg);
-        if(!msg.hasParam(Message.PARAM_NEED_RESPONSE))
-        {
-            msg.setParam(Message.PARAM_NEED_RESPONSE, false);
-        }
+        msg.setParamIfNotExist(Message.PARAM_NEED_RESPONSE, false);
+        msg.setParamIfNotExist(Message.PARAM_PRINT_BEFORE_SENT, false);
+        msg.setParamIfNotExist(Message.PARAM_PRINT_AFTER_RECEIVE, false);
+        msg.setParamIfNotExist(Message.PARAM_NEED_RESPONSE, false);
+        msg.setParamIfNotExist(Message.PARAM_SOURCE_UUID, this.commUUID);
     }
     
     public void sendMessage(String host, int port, Message msg) throws IOException
     {
         prepareMsg(msg);
+        if(msg.getBooleanParam(Message.PARAM_PRINT_BEFORE_SENT))
+        {
+            System.err.println("-----" + name + "-----");
+            System.err.println(msg);
+            System.err.println("------------------");
+        }
         Socket s = new Socket(host, port);
         ObjectOutputStream os = new ObjectOutputStream(s.getOutputStream());
         os.writeObject(msg);
@@ -164,7 +176,6 @@ public class Communicable
         msg.setParam(Message.PARAM_STATE, Message.STATE_REQUEST);
         msg.setParam(Message.PARAM_RESPONSE_PORT, responsePort);
         sendMessage(targetHost, targetPort, msg);
-        Utils.printMap(System.err, waitingMsgs);
         if(!isSync)
         {
             return null;
@@ -214,6 +225,7 @@ public class Communicable
      */
     public void sendForResponseAsync(HostAddress target, int responsePort, Message msg) throws IOException
     {
+        System.err.println(msg);
         sendForResponseAsync(target.getHost(), target.getPort(), responsePort, msg);
     }
     
@@ -270,13 +282,15 @@ public class Communicable
      * @param response
      * @throws IOException 
      */
-    public void sendResponseMsg(Message original, Message response) throws IOException
+    public void sendResponseMsg(HostAddress to, Message original, Message response) throws IOException
     {
-        response.setParamFromMsg(original, Message.PARAM_WORKER_UUID);
+        
+//        response.setParamFromMsg(original, Message.PARAM_WORKER_UUID);
+        response.setParamFromMsg(original, Message.PARAM_SOURCE_UUID);
         response.setParam(Message.PARAM_STATE, Message.STATE_RESPONSE);
-        response.setParam(Message.PARAM_MSG_UUID, original.getParam(Message.PARAM_MSG_UUID));
+        response.setParam(Message.PARAM_RESPONSE_FOR_MSG_UUID, original.getParam(Message.PARAM_MSG_UUID));
         response.setParam(Message.PARAM_RESPONSE_PORT, original.getParam(Message.PARAM_RESPONSE_PORT));
-        sendMessage(original.getAddressParam(Message.PARAM_ESP_ADDRESS), response);
+        sendMessage(to, response);
 //        sendMessage(original.getParam(Message.PARAM_FROM), original.getIntParam(Message.PARAM_RESPONSE_PORT), response);
     }
     
@@ -287,9 +301,9 @@ public class Communicable
      * Only use Message.TYPE_RESPONSE_TO_WORKER or Message.TYPE_RESPONSE_TO_MANAGER 
      * @throws IOException 
      */
-    public void sendEmptyResponseMsg(Message original, short msgType) throws IOException
+    public void sendEmptyResponseMsg(HostAddress to, Message original, short msgType) throws IOException
     {
         Message response = new Message(msgType);
-        sendResponseMsg(original, response);
+        sendResponseMsg(to, original, response);
     }
 }

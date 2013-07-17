@@ -5,8 +5,8 @@
 package workflowengine.utils;
 
 import com.zehon.FileTransferStatus;
+import com.zehon.exception.FileTransferException;
 import com.zehon.sftp.SFTPClient;
-import workflowengine.WorkflowEngine;
 
 /**
  *
@@ -35,5 +35,25 @@ public class SFTPUtils
     {
         init();
         return new SFTPClient(host,sshUser, sshPass);
+    }
+    
+    public static void createFolderPath(SFTPClient client, String folderPath) throws FileTransferException
+    {
+        String[] dirs = folderPath.split("/");
+        String path = "";
+        for(String d : dirs)
+        {
+            if(d.equals(""))
+            {
+                continue;
+            }
+            String p = path+"/"+d;
+            if(!client.folderExists(p))
+            {
+                System.err.println("Crating dir "+p);
+                client.createFolder(d, path);
+            }
+            path = p;
+        }
     }
 }

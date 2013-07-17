@@ -13,6 +13,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -21,6 +22,7 @@ import java.util.List;
 public class DBRecord
 {
 
+    public static final Object DB_LOCKER = new Object();
     private HashMap<String, String> record = new HashMap<>();
     private String table;
     private static Connection con = null;
@@ -44,21 +46,24 @@ public class DBRecord
 
     public static void prepareConnection()
     {
-        if (con == null)
+        synchronized (DB_LOCKER)
         {
-            try
+            if (con == null)
             {
-                String url = "jdbc:mysql://" + Utils.getProp("DBHost") + ":" + Utils.getProp("DBPort") + "/" + Utils.getProp("DBName");
+                try
+                {
+                    String url = "jdbc:mysql://" + Utils.getProp("DBHost") + ":" + Utils.getProp("DBPort") + "/" + Utils.getProp("DBName");
 //                System.out.println(url);
-                Class.forName("com.mysql.jdbc.Driver");
-                con = DriverManager.getConnection(
-                        url,
-                        Utils.getProp("DBUser"),
-                        Utils.getProp("DBPass"));
-            }
-            catch (ClassNotFoundException | SQLException ex)
-            {
-                throw new DBException(ex, "");
+                    Class.forName("com.mysql.jdbc.Driver");
+                    con = DriverManager.getConnection(
+                            url,
+                            Utils.getProp("DBUser"),
+                            Utils.getProp("DBPass"));
+                }
+                catch (ClassNotFoundException | SQLException ex)
+                {
+                    throw new DBException(ex, "");
+                }
             }
         }
     }
@@ -68,7 +73,7 @@ public class DBRecord
         record.put(key, val);
     }
 
-    public void set(String key, double val)
+    private void set(String key, double val)
     {
         set(key, val + "");
     }
@@ -77,10 +82,12 @@ public class DBRecord
     {
         return record.get(key);
     }
+
     public double getDouble(String key)
     {
         return Double.parseDouble(record.get(key));
     }
+
     public int getInt(String key)
     {
         return Integer.parseInt(record.get(key));
@@ -102,110 +109,125 @@ public class DBRecord
     }
 
     /**
-     * Insert this record if not exist in DB. 
-     * Otherwise, return the value of first primary key of 
-     * the first found record.
-     * @return 
+     * Insert this record if not exist in DB. Otherwise, return the value of
+     * first primary key of the first found record.
+     *
+     * @return
      */
     public int insertIfNotExist()
     {
-        List<DBRecord> res = select(table, this);
-        if(res.isEmpty())
+        synchronized (DB_LOCKER)
         {
-            return insert();
-        }
-        else
-        {
-            return res.get(0).getInt(getFirstPrimaryKeyName(table));
+            List<DBRecord> res = select(table, this);
+            if (res.isEmpty())
+            {
+                return insert();
+            }
+            else
+            {
+                return res.get(0).getInt(getFirstPrimaryKeyName(table));
+            }
         }
     }
-    
+
     public String getFirstPrimaryKeyName(String table)
     {
-        return select("SHOW KEYS FROM "+table+" WHERE Key_name = 'PRIMARY'").get(0).get("Column_name");
+        synchronized (DB_LOCKER)
+        {
+            return select("SHOW KEYS FROM " + table + " WHERE Key_name = 'PRIMARY'").get(0).get("Column_name");
+        }
     }
-    
+
     public int insert()
     {
+        synchronized (DB_LOCKER)
+        {
             StringBuilder query = new StringBuilder();
-        try
-        {
-            prepareConnection();
-            query.append("INSERT INTO ");
-            query.append(table);
-            query.append(" ( ");
-            for (String key : record.keySet())
+            try
             {
-                query.append(" ").append(key).append(", ");
-            }
-            query.delete(query.length() - 2, query.length());
-            query.append(") VALUES ( ");
-            for (String key : record.keySet())
-            {
-                query.append(" '").append(record.get(key)).append("', ");
-            }
-            query.delete(query.length() - 2, query.length());
-            query.append(" ) ");
+                prepareConnection();
+                query.append("INSERT INTO ");
+                query.append(table);
+                query.append(" ( ");
+                for (String key : record.keySet())
+                {
+                    query.append(" ").append(key).append(", ");
+                }
+                query.delete(query.length() - 2, query.length());
+                query.append(") VALUES ( ");
+                for (String key : record.keySet())
+                {
+                    query.append(" '").append(record.get(key)).append("', ");
+                }
+                query.delete(query.length() - 2, query.length());
+                query.append(" ) ");
 //            System.out.println(query);
-            Statement smt = con.createStatement();
-            smt.executeUpdate(query.toString(), Statement.RETURN_GENERATED_KEYS);
-            ResultSet rs = smt.getGeneratedKeys();
-            rs.next();
-            return rs.getInt(1);
-        }
-        catch (SQLException ex)
-        {
-            throw new DBException(ex, query.toString());
+                Statement smt = con.createStatement();
+                smt.executeUpdate(query.toString(), Statement.RETURN_GENERATED_KEYS);
+                ResultSet rs = smt.getGeneratedKeys();
+                rs.next();
+                return rs.getInt(1);
+            }
+            catch (SQLException ex)
+            {
+                throw new DBException(ex, query.toString());
+            }
         }
     }
 
     public int delete()
     {
+        synchronized (DB_LOCKER)
+        {
             StringBuilder query = new StringBuilder();
-        try
-        {
-            prepareConnection();
-            query.append("DELETE FROM ").append(table).append(" WHERE ");
-            for (String key : record.keySet())
+            try
             {
-                query.append(" ").append(key).append("='").append(record.get(key)).append("', ");
+                prepareConnection();
+                query.append("DELETE FROM ").append(table).append(" WHERE ");
+                for (String key : record.keySet())
+                {
+                    query.append(" ").append(key).append("='").append(record.get(key)).append("', ");
+                }
+                query.delete(query.length() - 2, query.length());
+                return con.createStatement().executeUpdate(query.toString());
             }
-            query.delete(query.length() - 2, query.length());
-            return con.createStatement().executeUpdate(query.toString());
-        }
-        catch (SQLException ex)
-        {
-            throw new DBException(ex, query.toString());
+            catch (SQLException ex)
+            {
+                throw new DBException(ex, query.toString());
+            }
         }
     }
 
     public int update(DBRecord where)
     {
-        StringBuilder query  = new StringBuilder();
-        try
+        synchronized (DB_LOCKER)
         {
-            prepareConnection();
-            query.append("UPDATE ").append(table).append(" SET ");
-            for (String key : record.keySet())
+            StringBuilder query = new StringBuilder();
+            try
             {
-                query.append(" ").append(key).append("='").append(record.get(key)).append("', ");
-            }
-            query.delete(query.length() - 2, query.length());
-
-            if (where.getFieldCount() > 0)
-            {
-                query.append(" WHERE 1 ");
-                for (String key : where.record.keySet())
+                prepareConnection();
+                query.append("UPDATE ").append(table).append(" SET ");
+                for (String key : record.keySet())
                 {
-                    query.append(" AND ").append(key).append("='").append(where.get(key)).append("'");
+                    query.append(" ").append(key).append("='").append(record.get(key)).append("', ");
                 }
-            }
+                query.delete(query.length() - 2, query.length());
+
+                if (where.getFieldCount() > 0)
+                {
+                    query.append(" WHERE 1 ");
+                    for (String key : where.record.keySet())
+                    {
+                        query.append(" AND ").append(key).append("='").append(where.get(key)).append("'");
+                    }
+                }
 //            System.out.println(query);
-            return con.createStatement().executeUpdate(query.toString());
-        }
-        catch (SQLException ex)
-        {
-            throw new DBException(ex, query.toString());
+                return con.createStatement().executeUpdate(query.toString());
+            }
+            catch (SQLException ex)
+            {
+                throw new DBException(ex, query.toString());
+            }
         }
     }
 
@@ -226,14 +248,17 @@ public class DBRecord
 
     public static int update(String sql)
     {
-        try
+        synchronized (DB_LOCKER)
         {
-            prepareConnection();
-            return con.createStatement().executeUpdate(sql);
-        }
-        catch (SQLException ex)
-        {
-            throw new DBException(ex, sql);
+            try
+            {
+                prepareConnection();
+                return con.createStatement().executeUpdate(sql);
+            }
+            catch (SQLException ex)
+            {
+                throw new DBException(ex, sql);
+            }
         }
     }
 
@@ -241,6 +266,7 @@ public class DBRecord
     {
         return select(table, new DBRecord());
     }
+
     public static List<DBRecord> select(String sql)
     {
         return select("", sql);
@@ -261,27 +287,30 @@ public class DBRecord
 
     public static List<DBRecord> select(String table, String sql)
     {
-        prepareConnection();
-        try
+        synchronized (DB_LOCKER)
         {
-            ResultSet rs = con.createStatement().executeQuery(sql);
-            ResultSetMetaData md = rs.getMetaData();
-            ArrayList<DBRecord> results = new ArrayList<>();
-            while (rs.next())
+            prepareConnection();
+            try
             {
-                DBRecord r = new DBRecord();
-                for (int i = 1; i <= md.getColumnCount(); i++)
+                ResultSet rs = con.createStatement().executeQuery(sql);
+                ResultSetMetaData md = rs.getMetaData();
+                ArrayList<DBRecord> results = new ArrayList<>();
+                while (rs.next())
                 {
-                    r.set(md.getColumnLabel(i), rs.getString(i));
+                    DBRecord r = new DBRecord();
+                    for (int i = 1; i <= md.getColumnCount(); i++)
+                    {
+                        r.set(md.getColumnLabel(i), rs.getString(i));
+                    }
+                    r.setTable(table);
+                    results.add(r);
                 }
-                r.setTable(table);
-                results.add(r);
+                return results;
             }
-            return results;
-        }
-        catch (SQLException ex)
-        {
-            throw new DBException(ex, sql);
+            catch (SQLException ex)
+            {
+                throw new DBException(ex, sql);
+            }
         }
     }
 
@@ -295,5 +324,17 @@ public class DBRecord
         }
         sb.delete(sb.length() - 2, sb.length());
         return sb.toString();
+    }
+    
+    public static void main(String[] args)
+    {
+        for(DBRecord rec : DBRecord.select("workflow_task_file", 
+                new DBRecord("workflow_task_file", 
+                "type", "O", 
+                "tid", 4)))
+        {
+            WorkflowFile wf = WorkflowFile.getFileFromDB(rec.getInt("fid"));
+            System.out.println(wf.toString());
+        }
     }
 }

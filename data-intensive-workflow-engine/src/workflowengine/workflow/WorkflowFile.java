@@ -99,6 +99,6 @@ public class WorkflowFile implements Serializable
 
     public String toString()
     {
-        return "["+type+"]name("+dbid+"):"+size+"MB";
+        return "["+type+"]"+name+"("+dbid+"):"+size+"MB";
     }
 }

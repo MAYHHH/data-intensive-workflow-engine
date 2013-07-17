@@ -24,26 +24,29 @@ public class Message implements Serializable
     public static final short TYPE_GET_TASK_STATUS = 8;
     public static final short TYPE_SUBMIT_WORKFLOW = 9;
     public static final short TYPE_FILE_UPLOAD_REQUEST = 10;
-//    public static final short TYPE_RESPONSE = 11;
     public static final short TYPE_REGISTER_FILE = 12;
     public static final short TYPE_RESPONSE_TO_MANAGER = 13;
     public static final short TYPE_RESPONSE_TO_WORKER = 14;
     
-    public static final String PARAM_NEED_RESPONSE = "#NEED_RESPONSE";
-    public static final String PARAM_MSG_UUID = "#MSG_UUID";
-    public static final String PARAM_STATE = "#STATE";
-    public static final String PARAM_RESPONSE_PORT = "#RESPONSE_PORT";
-    public static final String PARAM_FROM = "#FROM";
-    public static final String PARAM_FROM_PORT = "#FROM_PORT";
+    public static final String PARAM_NEED_RESPONSE = "#PARAM_NEED_RESPONSE";
+    public static final String PARAM_MSG_UUID = "#PARAM_MSG_UUID";
+    public static final String PARAM_STATE = "#PARAM_STATE";
+    public static final String PARAM_RESPONSE_PORT = "#PARAM_RESPONSE_PORT";
+    public static final String PARAM_FROM = "#PARAM_FROM";
+    public static final String PARAM_FROM_PORT = "#PARAM_FROM_PORT";
+    public static final String PARAM_RESPONSE_FOR_MSG_UUID = "#PARAM_RESPONSE_FOR_MSG_UUID";
+    public static final String PARAM_SOURCE_UUID = "#PARAM_SOURCE_UUID";
     
-    public static final String PARAM_FROM_SOURCE = "#FROM_SOURCE";
-    public static final String PARAM_WORKER_UUID = "uuid";
-    public static final String PARAM_WORKER_ADDRESS = "address";
-    public static final String PARAM_WORKER_PORT = "port";
-    public static final String PARAM_ESP_ADDRESS = "esp_address";
+    public static final String PARAM_FROM_SOURCE = "#PARAM_FROM_SOURCE";
+    public static final String PARAM_WORKER_UUID = "#PARAM_WORKER_UUID";
+    public static final String PARAM_WORKER_ADDRESS = "#PARAM_WORKER_ADDRESS";
+    public static final String PARAM_WORKER_PORT = "#PARAM_WORKER_PORT";
+    public static final String PARAM_ESP_ADDRESS = "#PARAM_ESP_ADDRESS";
+    public static final String PARAM_PRINT_BEFORE_SENT = "#PARAM_PRINT_BEFORE_SENT";
+    public static final String PARAM_PRINT_AFTER_RECEIVE = "#PARAM_PRINT_AFTER_RECEIVE";
     
-    public static final String STATE_REQUEST = "#REQUEST";
-    public static final String STATE_RESPONSE = "#RESPONSE";
+    public static final String STATE_REQUEST = "#STATE_REQUEST";
+    public static final String STATE_RESPONSE = "#STATE_RESPONSE";
     
     public static final String SOURCE_TASK_MANAGER = "#SOURCE_TASK_MANAGER";
     public static final String SOURCE_TASK_EXECUTOR = "#SOURCE_TASK_EXECUTOR";
@@ -102,7 +105,7 @@ public class Message implements Serializable
     public boolean getBooleanParam(String s)
     {
         Object o = params.get(s);
-        return o == null ? null : (boolean)o;
+        return o == null ? null : Boolean.parseBoolean(o.toString());
     }
     
     public void setParam(String s, Object o)
@@ -124,6 +127,13 @@ public class Message implements Serializable
         this.params.put(key, msg.params.get(key));
     }
     
+    public void setParamIfNotExist(String k, Object v)
+    {
+        if(!hasParam(k))
+        {
+            setParam(k, v);
+        }
+    }
     
     @Override
     public String toString()
