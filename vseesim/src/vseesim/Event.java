@@ -12,7 +12,7 @@ public class Event implements Comparable<Event>
     public static final int TYPE_FILE_SENT = 2;
     private HashMap <String,Object> hmap = new HashMap<>();
     
-    private int time;
+    private double time;
     private int type;
 
     public Event(int type)
@@ -27,12 +27,12 @@ public class Event implements Comparable<Event>
         this.type = type;
     }
 
-    public int getTime()
+    public double getTime()
     {
         return time;
     }
     
-    public void setTime(int time)
+    public void setTime(double time)
     {
         this.time = time;
     }

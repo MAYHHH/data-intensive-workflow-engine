@@ -12,7 +12,9 @@ public class Vseesim
 {
     static PriorityQueue<Event> eq = new PriorityQueue<>();
     static HashMap<Partition,Machine> hm= new HashMap<>();
-    static int time;
+    static double time;
+    static double latency;
+    static double bandWidth;
     
     public static void init()
     {
@@ -26,8 +28,18 @@ public class Vseesim
     public static void run()
     {
         Event e = eq.poll();
+        time = e.getTime();
         switch(e.getType())
         {
+            case Event.TYPE_FILE_SENT:
+                scheduleNextTaskFinishEvent();
+                break;
+            case Event.TYPE_TASK_FIN:
+                Event newEvent = new Event(Event.TYPE_FILE_SENT);
+                Partition p = (Partition)e.getProperty("Partition");
+                newEvent.setTime(time+(1*latency+(p.getOutputsize()/bandWidth)));
+                eq.add(newEvent);
+                break;
             
         }
     }
