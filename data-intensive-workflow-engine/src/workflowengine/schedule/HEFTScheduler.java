@@ -4,11 +4,10 @@
  */
 package workflowengine.schedule;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.List;
+import java.util.LinkedList;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
 
@@ -43,7 +42,12 @@ public class HEFTScheduler implements Scheduler
             rank[i] = -1;
         }
         rank(settings.getWf().getStartTask());
-        List<Task> sortedTasks = getSortedTasks();
+        LinkedList<Task> sortedTasks = getSortedTasks();
+        
+        while (!sortedTasks.isEmpty())
+        {
+            Task t = sortedTasks.poll();
+        }
     }
 
     void calAvgExec()
@@ -107,9 +111,9 @@ public class HEFTScheduler implements Scheduler
         }
     }
     
-    List<Task> getSortedTasks()
+    LinkedList<Task> getSortedTasks()
     {
-        ArrayList<Task> tasks = new ArrayList<>(totalTasks);
+        LinkedList<Task> tasks = new LinkedList<>();
         for(int i=0;i<totalTasks;i++)
         {
             tasks.add(settings.getTask(i));
@@ -124,13 +128,13 @@ public class HEFTScheduler implements Scheduler
                 double r2 = rank[settings.getTaskIndex(o2)];
                 if(r1 < r2)
                 {
-                    return -1;
+                    return 1;
                 }
                 if(r1 == r2)
                 {
                     return 0;
                 }
-                return 1;
+                return -1;
             }
         });
         return tasks;
