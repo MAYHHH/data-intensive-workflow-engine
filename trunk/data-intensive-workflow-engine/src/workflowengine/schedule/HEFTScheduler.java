@@ -7,7 +7,9 @@ package workflowengine.schedule;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedList;
+import workflowengine.resource.Worker;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
 
@@ -44,10 +46,46 @@ public class HEFTScheduler implements Scheduler
         rank(settings.getWf().getStartTask());
         LinkedList<Task> sortedTasks = getSortedTasks();
         
+        return calSchedule(sortedTasks);
+    }
+    
+    Schedule calSchedule(LinkedList<Task> sortedTasks)
+    {
+        Schedule s = new Schedule(settings);
+        HashMap<Worker, Double> workerReadyTime = new HashMap<>(totalWorkers);
+        HashMap<Task, Double> taskFinishTime = new HashMap<>(totalWorkers);
+        for(Worker w : settings.getWorkerIterable())
+        {
+            workerReadyTime.put(w, 0.0);
+        }
         while (!sortedTasks.isEmpty())
         {
             Task t = sortedTasks.poll();
+            Worker targetW = settings.getWorker(0);
+            double parentFinTime = Double.NEGATIVE_INFINITY;
+            
+            
+            double minFinTime = Double.POSITIVE_INFINITY;
+            for(Worker w : settings.getWorkerIterable())
+            {
+                for(Task p : settings.getWf().getParentTasks(t))
+                {
+                    Worker parentWorker = s.getWorkerForTask(p);
+                    double commTime = parentWorker.equalTo(w) ? 0 : settings.getEs().getTransferTime(parentWorker, w, p.getOutputFilesForTask(t));
+                    parentFinTime = Math.max(parentFinTime, taskFinishTime.get(p)+commTime);
+                }
+                double finTime = Math.max(parentFinTime, workerReadyTime.get(w))+w.getExecTime(t);
+                if(finTime < minFinTime)
+                {
+                    minFinTime = finTime;
+                    targetW = w;
+                }
+            }
+            s.setWorkerForTask(t, targetW);
+            workerReadyTime.put(targetW, minFinTime);
+            taskFinishTime.put(t, minFinTime);
         }
+        return s;
     }
 
     void calAvgExec()
@@ -78,10 +116,7 @@ public class HEFTScheduler implements Scheduler
                 {
                     for (int l = 0; l < totalWorkers; l++)
                     {
-                        for (WorkflowFile f : files)
-                        {
-                            sum = sum + settings.getEs().getTransferTime(settings.getWorker(k), settings.getWorker(l), f);
-                        }
+                        sum = sum + settings.getEs().getTransferTime(settings.getWorker(k), settings.getWorker(l), files);
                     }
                 }
                 avgCommTime[t1][settings.getTaskIndex(child)] = sum / totalWorkers / totalWorkers;
