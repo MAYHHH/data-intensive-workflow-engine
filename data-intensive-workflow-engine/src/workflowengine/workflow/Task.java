@@ -3,6 +3,7 @@ package workflowengine.workflow;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import workflowengine.utils.DBException;
@@ -258,6 +259,25 @@ public class Task implements Serializable
         }
         return files;
     }
+    
+    public WorkflowFile[] getOutputFilesForTask(Task t) 
+    {
+        WorkflowFile[] out = this.getOutputFiles();
+        WorkflowFile[] in = t.getInputFiles();
+        LinkedList<WorkflowFile> files = new LinkedList<>();
+        for(int i=0;i<out.length;i++)
+        {
+            for(int j=0;j<in.length;j++)
+            {
+                if(out[i].equals(in[j]))
+                {
+                    files.add(out[i]);
+                }
+            }
+        }
+        return files.toArray(new WorkflowFile[]{});
+    }
+    
     public String[] getOutputFilesString() throws DBException
     {
         List<DBRecord> results = DBRecord.select(
