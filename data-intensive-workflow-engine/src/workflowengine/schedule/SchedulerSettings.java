@@ -5,6 +5,7 @@
 package workflowengine.schedule;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -28,6 +29,13 @@ public class SchedulerSettings
     private final int totalTasks;
     private final int totalWorkers;
     private final Set<Task> fixedTasks;
+    private Iterable<Task> taskIterable = new Iterable<Task>() {
+        @Override
+        public Iterator<Task> iterator()
+        {
+            return taskList.iterator();
+        }
+    };
     
     public SchedulerSettings(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
     {
@@ -121,5 +129,27 @@ public class SchedulerSettings
     public int getTaskIndex(Task t)
     {
         return taskList.indexOf(t);
+    }
+    
+    public int getWorkerIndex(Worker w)
+    {
+        return es.getWorkerIndex(w);
+    }
+    
+    public Iterable<Task> getTaskIterable()
+    {
+        return new Iterable<Task>() {
+
+            @Override
+            public Iterator<Task> iterator()
+            {
+                return taskList.iterator();
+            }
+        };
+    }
+    
+    public Iterable<Worker> getWorkerIterable()
+    {
+        return es.getWorkerIterable();
     }
 }
