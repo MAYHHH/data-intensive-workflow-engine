@@ -118,4 +118,8 @@ public class SchedulerSettings
         return fixedTasks;
     }
     
+    public int getTaskIndex(Task t)
+    {
+        return taskList.indexOf(t);
+    }
 }
