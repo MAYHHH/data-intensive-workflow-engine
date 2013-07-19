@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS `_workflow_input_file` (
 --
 DROP TABLE IF EXISTS `_completed_parent_task`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_completed_parent_task` AS select `workflow_task`.`tid` AS `tid` from `workflow_task` where (`workflow_task`.`status` = 'C');
+CREATE ALGORITHM=UNDEFINED DEFINER=`we`@`%` SQL SECURITY DEFINER VIEW `_completed_parent_task` AS select `workflow_task`.`tid` AS `tid` from `workflow_task` where (`workflow_task`.`status` = 'C');
 
 -- --------------------------------------------------------
 
@@ -232,7 +232,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_comple
 --
 DROP TABLE IF EXISTS `_completed_parent_task_count`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_completed_parent_task_count` AS select `t`.`tid` AS `tid`,count(`d`.`parent`) AS `parents` from ((`workflow_task` `t` left join `workflow_task_depen` `d` on((`t`.`tid` = `d`.`child`))) join `workflow_task` `p` on((`d`.`parent` = `p`.`tid`))) where (`p`.`status` = 'C') group by `t`.`tid`;
+CREATE ALGORITHM=UNDEFINED DEFINER=`we`@`%` SQL SECURITY DEFINER VIEW `_completed_parent_task_count` AS select `t`.`tid` AS `tid`,count(`d`.`parent`) AS `parents` from ((`workflow_task` `t` left join `workflow_task_depen` `d` on((`t`.`tid` = `d`.`child`))) join `workflow_task` `p` on((`d`.`parent` = `p`.`tid`))) where (`p`.`status` = 'C') group by `t`.`tid`;
 
 -- --------------------------------------------------------
 
@@ -241,7 +241,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_comple
 --
 DROP TABLE IF EXISTS `_parent_task_count`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_parent_task_count` AS select `t`.`tid` AS `tid`,count(`d`.`parent`) AS `parents` from (`workflow_task` `t` left join `workflow_task_depen` `d` on((`t`.`tid` = `d`.`child`))) group by `t`.`tid`;
+CREATE ALGORITHM=UNDEFINED DEFINER=`we`@`%` SQL SECURITY DEFINER VIEW `_parent_task_count` AS select `t`.`tid` AS `tid`,count(`d`.`parent`) AS `parents` from (`workflow_task` `t` left join `workflow_task_depen` `d` on((`t`.`tid` = `d`.`child`))) group by `t`.`tid`;
 
 -- --------------------------------------------------------
 
@@ -250,7 +250,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_parent
 --
 DROP TABLE IF EXISTS `_task_to_dispatch`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_task_to_dispatch` AS select min(`t`.`tid`) AS `tid`,`wk`.`uuid` AS `uuid`,`es`.`hostname` AS `esp_hostname`,`es`.`port` AS `esp_port` from (((((`_parent_task_count` `pc` left join `_completed_parent_task_count` `cpc` on((`pc`.`tid` = `cpc`.`tid`))) join `schedule` `s` on((`pc`.`tid` = `s`.`tid`))) join `worker` `wk` on((`s`.`wkid` = `wk`.`wkid`))) join `workflow_task` `t` on((`t`.`tid` = `pc`.`tid`))) join `exec_site` `es` on((`es`.`esid` = `wk`.`esid`))) where (((`pc`.`parents` - ifnull(`cpc`.`parents`,0)) = 0) and (`wk`.`current_tid` = -(1)) and (`t`.`status` in ('F','W','S'))) group by `wk`.`hostname`;
+CREATE ALGORITHM=UNDEFINED DEFINER=`we`@`%` SQL SECURITY DEFINER VIEW `_task_to_dispatch` AS select min(`t`.`tid`) AS `tid`,`wk`.`uuid` AS `uuid`,`es`.`hostname` AS `esp_hostname`,`es`.`port` AS `esp_port` from (((((`_parent_task_count` `pc` left join `_completed_parent_task_count` `cpc` on((`pc`.`tid` = `cpc`.`tid`))) join `schedule` `s` on((`pc`.`tid` = `s`.`tid`))) join `worker` `wk` on((`s`.`wkid` = `wk`.`wkid`))) join `workflow_task` `t` on((`t`.`tid` = `pc`.`tid`))) join `exec_site` `es` on((`es`.`esid` = `wk`.`esid`))) where (((`pc`.`parents` - ifnull(`cpc`.`parents`,0)) = 0) and (`wk`.`current_tid` = -(1)) and (`t`.`status` in ('F','W','S'))) group by `wk`.`hostname`;
 
 -- --------------------------------------------------------
 
@@ -259,4 +259,4 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_task_t
 --
 DROP TABLE IF EXISTS `_workflow_input_file`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `_workflow_input_file` AS select `t`.`wfid` AS `wfid`,`i`.`tid` AS `tid`,`f`.`fid` AS `fid`,`f`.`name` AS `name`,`f`.`estsize` AS `estsize` from (((`workflow_task_file` `i` left join `workflow_task_file` `o` on(((`i`.`fid` = `o`.`fid`) and (`i`.`type` <> `o`.`type`)))) join `workflow_task` `t` on((`i`.`tid` = `t`.`tid`))) join `file` `f` on((`i`.`fid` = `f`.`fid`))) where ((`i`.`type` = 'I') and isnull(`o`.`tid`));
+CREATE ALGORITHM=UNDEFINED DEFINER=`we`@`%` SQL SECURITY DEFINER VIEW `_workflow_input_file` AS select `t`.`wfid` AS `wfid`,`i`.`tid` AS `tid`,`f`.`fid` AS `fid`,`f`.`name` AS `name`,`f`.`estsize` AS `estsize` from (((`workflow_task_file` `i` left join `workflow_task_file` `o` on(((`i`.`fid` = `o`.`fid`) and (`i`.`type` <> `o`.`type`)))) join `workflow_task` `t` on((`i`.`tid` = `t`.`tid`))) join `file` `f` on((`i`.`fid` = `f`.`fid`))) where ((`i`.`type` = 'I') and isnull(`o`.`tid`));

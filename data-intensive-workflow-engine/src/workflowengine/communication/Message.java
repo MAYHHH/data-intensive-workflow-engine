@@ -44,6 +44,7 @@ public class Message implements Serializable
     public static final String PARAM_ESP_ADDRESS = "#PARAM_ESP_ADDRESS";
     public static final String PARAM_PRINT_BEFORE_SENT = "#PARAM_PRINT_BEFORE_SENT";
     public static final String PARAM_PRINT_AFTER_RECEIVE = "#PARAM_PRINT_AFTER_RECEIVE";
+    public static final String PARAM_WORKER_MSGS = "#PARAM_WORKER_MSGS";
     
     public static final String STATE_REQUEST = "#STATE_REQUEST";
     public static final String STATE_RESPONSE = "#STATE_RESPONSE";
@@ -124,7 +125,7 @@ public class Message implements Serializable
     }
     public void setParamFromMsg(Message msg, String key)
     {
-        this.params.put(key, msg.params.get(key));
+        this.params.put(key, msg.getObjectParam(key));
     }
     
     public void setParamIfNotExist(String k, Object v)

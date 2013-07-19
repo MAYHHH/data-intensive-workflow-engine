@@ -59,6 +59,13 @@ public class Communicable
                                         String uuid = msg.getParam(Message.PARAM_RESPONSE_FOR_MSG_UUID);
                                         Message orgMsg = waitingMsgs.get(uuid);
                                         responseMsgs.put(uuid, msg);
+                                        
+                                        if(orgMsg == null)
+                                        {
+                                            System.err.println(msg);
+                                            Utils.printMap(System.err, waitingMsgs);
+                                        }
+                                        
                                         synchronized (orgMsg)
                                         {
                                             orgMsg.notify();
@@ -170,12 +177,12 @@ public class Communicable
     private Message sendForResponse(String targetHost, int targetPort, int responsePort, Message msg, boolean isSync) throws IOException
     {
         String uuid = Utils.uuid();
-        waitingMsgs.put(uuid, msg);
         msg.setParam(Message.PARAM_NEED_RESPONSE, true);
         msg.setParam(Message.PARAM_MSG_UUID, uuid);
         msg.setParam(Message.PARAM_STATE, Message.STATE_REQUEST);
         msg.setParam(Message.PARAM_RESPONSE_PORT, responsePort);
         sendMessage(targetHost, targetPort, msg);
+        waitingMsgs.put(uuid, msg);
         if(!isSync)
         {
             return null;

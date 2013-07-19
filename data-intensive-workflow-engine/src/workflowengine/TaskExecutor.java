@@ -6,10 +6,8 @@ package workflowengine;
 
 import com.zehon.exception.FileTransferException;
 import com.zehon.sftp.SFTPClient;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Properties;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
@@ -20,20 +18,18 @@ import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
 
-
 /**
  *
  * @author Orachun
  */
 public class TaskExecutor
 {
+
     public static final short STATUS_IDLE = 1;
     public static final short STATUS_BUSY = 2;
     private static final int HEARTBEAT_INTERVAL = 10000; //10 seconds
     private static Logger logger = new Logger("task-executor.log");
-    
     private static TaskExecutor te = null;
-    
     private Properties p = new Properties();
     private short status = STATUS_IDLE;
     private String currentTaskName;
@@ -45,16 +41,17 @@ public class TaskExecutor
     private Message currentRequestMsg;
     private boolean isSuspensed = false;
     private String uuid;
-    
     private HostAddress espAddr;
     private int port;
     private double cpu = -1;
-    private Communicable comm = new Communicable("Worker"){
-
+    private Communicable comm = new Communicable("Worker")
+    {
         @Override
         public void handleMessage(Message msg)
         {
-            switch(msg.getType())
+//            logger.log("Received msg from "+msg.getParam(Message.PARAM_FROM));
+//            logger.log(msg.toString());
+            switch (msg.getType())
             {
                 case Message.TYPE_DISPATCH_TASK:
                     exec(msg);
@@ -68,7 +65,7 @@ public class TaskExecutor
             }
         }
     };
-    
+
     private TaskExecutor() throws IOException
     {
         espAddr = new HostAddress(Utils.getPROP(), "exec_site_proxy_host", "exec_site_proxy_port");
@@ -80,7 +77,7 @@ public class TaskExecutor
         comm.startServer();
         startHeartBeat();
     }
-    
+
     public static TaskExecutor startService()
     {
         try
@@ -98,11 +95,11 @@ public class TaskExecutor
             return null;
         }
     }
-    
+
     private void startHeartBeat()
     {
-        Thread heartBeat = new Thread(new Runnable() {
-
+        Thread heartBeat = new Thread(new Runnable()
+        {
             @Override
             public void run()
             {
@@ -113,31 +110,36 @@ public class TaskExecutor
                         updateNodeStatus();
                         Thread.sleep(HEARTBEAT_INTERVAL);
                     }
-                    catch (InterruptedException ex) {}
+                    catch (InterruptedException ex)
+                    {
+                    }
                 }
             }
         });
         heartBeat.start();
     }
-   
+
     public void updateNodeStatus()
     {
         updateNodeStatus(false);
     }
-    
+
     public void updateNodeStatus(boolean sync)
     {
         Message msg = new Message(Message.TYPE_UPDATE_NODE_STATUS);
         msg.setParam("status", status);
-        File defaultStorage = new File(Utils.getProp("working_dir"));
-        msg.setParam("free_space", defaultStorage.getFreeSpace()); //in bytes
+
+//        File defaultStorage = new File(Utils.getProp("working_dir"));
+//        msg.setParam("free_space", defaultStorage.getFreeSpace()); //in bytes
+        msg.setParam("free_space", -1); //in bytes
+
         msg.setParam("current_tid", currentTaskDbid);
         msg.setParam("free_memory", getFreeMemory());
         msg.setParam("cpu", getCPU());
         msg.setParam(Message.PARAM_WORKER_PORT, this.port);
         try
         {
-            if(sync)
+            if (sync)
             {
                 comm.sendForResponseSync(espAddr, this.port, msg);
             }
@@ -151,43 +153,45 @@ public class TaskExecutor
             logger.log("Cannot update node status.", ex);
         }
     }
-    
+
     public double getFreeMemory()
     {
-        try
-        {
-            Process p = Runtime.getRuntime().exec(new String[]
-            {
-                "/bin/bash", "-c", "grep \"MemFree:\" /proc/meminfo | awk '{print $2}'"
-            });
-            return Integer.parseInt(new BufferedReader(new InputStreamReader(p.getInputStream())).readLine());
-        }
-        catch (IOException ex)
-        {
-            return -1;
-        }
+        return -1;
+//        try
+//        {
+//            Process p = Runtime.getRuntime().exec(new String[]
+//            {
+//                "/bin/bash", "-c", "grep \"MemFree:\" /proc/meminfo | awk '{print $2}'"
+//            });
+//            return Integer.parseInt(new BufferedReader(new InputStreamReader(p.getInputStream())).readLine());
+//        }
+//        catch (IOException ex)
+//        {
+//            return -1;
+//        }
     }
+
     public double getCPU()
     {
-        if(cpu == -1)
-        {
-            try
-            {
-                Process p = Runtime.getRuntime().exec(new String[]
-                {
-                    "/bin/bash", "-c", "echo 0 $(lscpu | grep \"CPU MHz:\" | awk '{print $3}' |  sed 's#^#+#' ) | bc"
-                });
-                cpu = Double.parseDouble(new BufferedReader(new InputStreamReader(p.getInputStream())).readLine());
-            }
-            catch (IOException ex)
-            {
-                cpu = -1;
-            }
-        }
-        return cpu;
+        return -1;
+//        if(cpu == -1)
+//        {
+//            try
+//            {
+//                Process p = Runtime.getRuntime().exec(new String[]
+//                {
+//                    "/bin/bash", "-c", "echo 0 $(lscpu | grep \"CPU MHz:\" | awk '{print $3}' |  sed 's#^#+#' ) | bc"
+//                });
+//                cpu = Double.parseDouble(new BufferedReader(new InputStreamReader(p.getInputStream())).readLine());
+//            }
+//            catch (IOException ex)
+//            {
+//                cpu = -1;
+//            }
+//        }
+//        return cpu;
     }
-    
-    
+
     private void setIdle()
     {
         currentTaskName = "";
@@ -199,72 +203,90 @@ public class TaskExecutor
         currentTaskEnd = -1;
         currentRequestMsg = null;
     }
-    
-    
+
     private String[] prepareCmd(Message msg)
     {
         String cmdPrefix = Utils.getProp("command_prefix");
         StringBuilder cmd = new StringBuilder();
         cmd.append(cmdPrefix).append(currentWorkingDir).append(msg.getParam("cmd"));
-        if(msg.getParam("migrate") != null)
+        if (msg.getParam("migrate") != null)
         {
             cmd.append(";-_condor_restart;").append(currentTaskName).append(".ckpt");
         }
         return cmd.toString().split(";");
     }
-    
+
     /**
      * Download input files using information of execution message
-     * @param msg 
+     *
+     * @param msg
      */
     private void downloadInputFiles(Message msg) throws FileTransferException
     {
-        WorkflowFile[] files = (WorkflowFile[])msg.getObjectParam("input_files");
+        WorkflowFile[] files = (WorkflowFile[]) msg.getObjectParam("input_files");
         String remoteDir = msg.getParam("file_dir");
         String espHost = Utils.getProp("exec_site_proxy_host");
         SFTPClient client = SFTPUtils.getSFTP(espHost);
-        for(WorkflowFile f : files)
+        for (WorkflowFile f : files)
         {
-            String localFilePath = currentWorkingDir+f.getName();
-            if(f.getType() == WorkflowFile.TYPE_DIRECTIORY)
+            logger.log("Downloading input files "+f.getName()+" for " + currentTaskName + "...");
+            String localFilePath = currentWorkingDir + f.getName();
+            try
             {
-                Utils.createDir(localFilePath);
-                client.getFolder(remoteDir+f.getName(), localFilePath, null);
+                if (f.getType() == WorkflowFile.TYPE_DIRECTIORY)
+                {
+                    Utils.createDir(localFilePath);
+                    client.getFolder(remoteDir + f.getName(), localFilePath, null);
+                }
+                else
+                {
+                    client.getFile(f.getName(), remoteDir, currentWorkingDir);
+                }
             }
-            else
+            catch (FileTransferException ex)
             {
-                client.getFile(f.getName(), remoteDir, currentWorkingDir);
+                logger.log("Cannot download file " + f.getName() + ".", ex);
+                throw ex;
             }
+            logger.log("Done.");
         }
     }
+
     private void uploadOutputFiles(Message msg) throws FileTransferException
     {
-        WorkflowFile[] files = (WorkflowFile[])msg.getObjectParam("output_files");
-//        System.err.println("output file");
-//        for(WorkflowFile f : files)
-//        {
-//            System.err.println(f.toString());
-//        }
+        WorkflowFile[] files = (WorkflowFile[]) msg.getObjectParam("output_files");
         String remoteDir = msg.getParam("file_dir");
         String espHost = Utils.getProp("exec_site_proxy_host");
         SFTPClient client = SFTPUtils.getSFTP(espHost);
-        for(WorkflowFile f : files)
+        for (WorkflowFile f : files)
         {
-            String localFilePath = currentWorkingDir+f.getName();
-            if(Utils.isDir(localFilePath))
+            logger.log("Uploading output files "+f.getName()+" from task " + currentTaskName + "...");
+            String localFilePath = currentWorkingDir + f.getName();
+
+            try
             {
-                String dir = new File(remoteDir+f.getName()).getParent();
-                SFTPUtils.createFolderPath(client, dir);
-                client.sendFolder(localFilePath, dir, null);
+                if (Utils.isDir(localFilePath))
+                {
+//                String dir = new File(remoteDir+f.getName()).getParent();
+                    String dir = remoteDir + f.getName();
+                    SFTPUtils.createFolderPath(client, dir);
+                    client.sendFolder(localFilePath, dir, null);
+                }
+                else
+                {
+                    String dir = new File(remoteDir + f.getName()).getParent();
+                    SFTPUtils.createFolderPath(client, dir);
+                    client.sendFile(localFilePath, dir);
+                }
             }
-            else
+            catch (FileTransferException ex)
             {
-                String dir = new File(remoteDir+f.getName()).getParent();
-                SFTPUtils.createFolderPath(client, dir);
-                client.sendFile(localFilePath, dir);
+                logger.log("Cannot upload output file " + f.getName() + ".", ex);
+                throw ex;
             }
+            logger.log("Done.");
         }
-        
+
         Message outputFileMsg = new Message(Message.TYPE_REGISTER_FILE);
         outputFileMsg.setParam("files", files);
         try
@@ -273,49 +295,49 @@ public class TaskExecutor
         }
         catch (IOException ex)
         {
-            logger.log("Cannot send file registering message to "+espAddr+": "+ex.getMessage(), ex);
+            logger.log("Cannot send file registering message to " + espAddr + ": " + ex.getMessage(), ex);
         }
     }
-    
+
     private void downloadExecutable(Message msg) throws FileTransferException
     {
         String namespace = msg.getParam("task_namespace");
-        if(!Utils.isFileExist(currentWorkingDir+namespace+"/"))
+        if (!Utils.isFileExist(currentWorkingDir + namespace + "/"))
         {
             long time = System.currentTimeMillis();
             SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
-                .getFolder(Utils.getProp("code_repository_dir")+namespace+"/", currentWorkingDir, null);
+                    .getFolder(Utils.getProp("code_repository_dir") + namespace + "/", currentWorkingDir, null);
             Utils.setExecutableInDirSince(currentWorkingDir, time);
         }
-        
-        
+
+
 //        String execName = msg.getParam("cmd").split(";")[0];
 //        SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
 //                .getFile(execName, Utils.getProp("code_repository_dir"), currentWorkingDir);
 //        new File(currentWorkingDir+execName).setExecutable(true);
     }
-    
+
     private Process startProcess(String[] cmds) throws IOException
     {
         ProcessBuilder pb = new ProcessBuilder(cmds).directory(new File(
                 currentWorkingDir));
         pb.redirectError(new File(currentWorkingDir + currentTaskName + ".stderr"));
         pb.redirectOutput(new File(currentWorkingDir + currentTaskName + ".stdout"));
-        String path = pb.environment().get("PATH") + ":"+currentWorkingDir;
+        String path = pb.environment().get("PATH") + ":" + currentWorkingDir;
         pb.environment().put("PATH", path);
         currentTaskStart = Utils.time();
-        logger.log("Starting execution of task "+currentTaskName+".");
+        logger.log("Starting execution of task " + currentTaskName + ".");
         return pb.start();
     }
-    
+
     private void prepareDirectory(Message msg)
     {
-        WorkflowFile[] inputs = (WorkflowFile[])msg.getObjectParam("input_files");
-        WorkflowFile[] outputs = (WorkflowFile[])msg.getObjectParam("output_files");
-        for(WorkflowFile f : inputs)
+        WorkflowFile[] inputs = (WorkflowFile[]) msg.getObjectParam("input_files");
+        WorkflowFile[] outputs = (WorkflowFile[]) msg.getObjectParam("output_files");
+        for (WorkflowFile f : inputs)
         {
-            File file = new File(currentWorkingDir+f.getName());
-            if(f.getType() == WorkflowFile.TYPE_DIRECTIORY)
+            File file = new File(currentWorkingDir + f.getName());
+            if (f.getType() == WorkflowFile.TYPE_DIRECTIORY)
             {
                 file.mkdirs();
             }
@@ -324,10 +346,10 @@ public class TaskExecutor
                 file.getParentFile().mkdirs();
             }
         }
-        for(WorkflowFile f : outputs)
+        for (WorkflowFile f : outputs)
         {
-            File file = new File(currentWorkingDir+f.getName());
-            if(f.getType() == WorkflowFile.TYPE_DIRECTIORY)
+            File file = new File(currentWorkingDir + f.getName());
+            if (f.getType() == WorkflowFile.TYPE_DIRECTIORY)
             {
                 file.mkdirs();
             }
@@ -337,10 +359,10 @@ public class TaskExecutor
             }
         }
     }
-    
+
     private String[] prepareExecutionAndGetCommands(Message msg) throws FileTransferException
     {
-        currentWorkingDir = Utils.getProp("working_dir")+msg.getParam("wfid")+"/";
+        currentWorkingDir = Utils.getProp("working_dir") + msg.getParam("wfid") + "/";
         currentRequestMsg = msg;
         currentTaskName = msg.getParam("task_name");
         String[] cmds = prepareCmd(msg);
@@ -351,10 +373,10 @@ public class TaskExecutor
         downloadExecutable(msg);
         return cmds;
     }
-    
+
     synchronized public void exec(Message msg)
     {
-        if(status == STATUS_BUSY)
+        if (status == STATUS_BUSY)
         {
             return;
         }
@@ -364,7 +386,7 @@ public class TaskExecutor
             status = STATUS_BUSY;
             String[] cmds = prepareExecutionAndGetCommands(msg);
             Process proc = startProcess(cmds);
-            
+
             //Send task status to manager that the task is started
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
             response.setParam("task_name", currentTaskName);
@@ -375,25 +397,25 @@ public class TaskExecutor
             response.setParam("end", -1);
             response.setParam("exit_value", -1);
             comm.sendMessage(espAddr, response);
-            
+
             //Wait for the process to complete
             int exitVal = proc.waitFor();
-            logger.log("Execution of task "+currentTaskName+" is finished.");
-            
+            logger.log("Execution of task " + currentTaskName + " is finished.");
+
             currentTaskEnd = Utils.time();
-            
-            if(isSuspensed)
+
+            if (isSuspensed)
             {
                 setIdle();
                 return;
             }
-            
+
             //Send task status to manager that the task is finished
             response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
             response.setParam("task_name", currentTaskName);
             response.setParam("tid", currentTaskDbid);
             response.setParam("wfid", msg.getParam("wfid"));
-            if(exitVal == 0)
+            if (exitVal == 0)
             {
                 response.setParam("status", Task.STATUS_COMPLETED);
             }
@@ -404,20 +426,20 @@ public class TaskExecutor
             response.setParam("start", currentTaskStart);
             response.setParam("end", currentTaskEnd);
             response.setParam("exit_value", exitVal);
-            logger.log("Uploading output file from task "+currentTaskName+"...");
+            logger.log("Uploading output file from task " + currentTaskName + "...");
             uploadOutputFiles(msg);
             logger.log("Done.");
-            
+
             setIdle();
             logger.log("Updating node status and wait for acknowledgment...");
             updateNodeStatus(true);
             logger.log("Done.");
             comm.sendMessage(espAddr, response);
         }
-        catch (IOException | InterruptedException | FileTransferException ex) 
+        catch (IOException | InterruptedException | FileTransferException ex)
         {
             currentTaskEnd = Utils.time();
-            String errorMsg = "Exception while "+currentTaskName+" is executing: "+ex.getMessage();
+            String errorMsg = "Exception while " + currentTaskName + " is executing: " + ex.getMessage();
             logger.log(errorMsg, ex);
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
             response.setParam("task_name", currentTaskName);
@@ -434,29 +456,31 @@ public class TaskExecutor
             }
             catch (IOException ex1)
             {
-                logger.log("Cannot send message to "+espAddr+".", ex1);
+                logger.log("Cannot send message to " + espAddr + ".", ex1);
             }
         }
     }
-    
+
     synchronized public void suspendCurrentTask()
     {
-        if(currentTaskName.length() == 0)
+        if (currentTaskName.length() == 0)
         {
             return;
         }
         try
         {
-            
-            Runtime.getRuntime().exec(new String[]{
-                "/bin/bash", "-c", "killall -s SIGTSTP "+currentProcName
+
+            Runtime.getRuntime().exec(new String[]
+            {
+                "/bin/bash", "-c", "killall -s SIGTSTP " + currentProcName
             }).waitFor();
             isSuspensed = true;
-            Runtime.getRuntime().exec(new String[]{
-                "/bin/bash", "-c", "mv "+currentWorkingDir+currentProcName+".ckpt "+
-                    currentWorkingDir+currentTaskName+".ckpt"
+            Runtime.getRuntime().exec(new String[]
+            {
+                "/bin/bash", "-c", "mv " + currentWorkingDir + currentProcName + ".ckpt "
+                + currentWorkingDir + currentTaskName + ".ckpt"
             }).waitFor();
-            
+
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
             response.setParam("task_name", currentTaskName);
             response.setParam("tid", currentTaskDbid);
@@ -470,8 +494,7 @@ public class TaskExecutor
         }
         catch (IOException | InterruptedException ex)
         {
-            logger.log("Cannot suspend process: "+ ex.getMessage());
+            logger.log("Cannot suspend process: " + ex.getMessage());
         }
     }
-    
 }
