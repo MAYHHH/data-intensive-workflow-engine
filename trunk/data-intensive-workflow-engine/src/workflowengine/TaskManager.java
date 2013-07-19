@@ -51,13 +51,22 @@ public class TaskManager
         @Override
         public void handleMessage(Message msg)
         {
+//            logger.log("Received msg from "+msg.getParam(Message.PARAM_FROM));
+//            logger.log(msg.toString());
             switch (msg.getType())
             {
                 case Message.TYPE_UPDATE_TASK_STATUS:
                     updateTaskStatus(msg);
                     break;
                 case Message.TYPE_UPDATE_NODE_STATUS:
-                    updateNodeStatus(msg);
+                    if(msg.getBooleanParam(Message.PARAM_NEED_RESPONSE))
+                    {
+                        updateNodeStatus(msg);
+                    }
+                    else
+                    {
+                        updateNodeStatuses(msg);
+                    }
                     break;
                 case Message.TYPE_SUBMIT_WORKFLOW:
                     submitWorkflow(msg);
@@ -138,15 +147,26 @@ public class TaskManager
         {
             try
             {
+                logger.log("Sending response message to worker "+msg.getAddressParam(Message.PARAM_WORKER_ADDRESS));
                 Message response = new Message(Message.TYPE_RESPONSE_TO_WORKER);
                 response.setParamFromMsg(msg, Message.PARAM_WORKER_UUID);
                 comm.sendResponseMsg(espAddr, msg, response);
+                logger.log("Done.");
             }
             catch (IOException ex)
             {
                 logger.log("Cannot send response message.", ex);
             }
         }
+    }
+    public void updateNodeStatuses(Message m)
+    {
+        Message[] msgs = (Message[])m.getObjectParam(Message.PARAM_WORKER_MSGS);
+        for(Message msg : msgs)
+        {
+            updateNodeStatus(msg);
+        }
+        //TODO:Support down worker by reschedule, etc.
     }
 
     public void updateTaskStatus(Message msg)
@@ -231,6 +251,16 @@ public class TaskManager
                 "esid", esid,
                 "fid", fid).insert();
     }
+    private void insertFileToEsp(int fid, String espHost)
+    {
+        int esid = new DBRecord("exec_site",
+                "hostname", espHost
+                ).insertIfNotExist();
+        new DBRecord("exec_site_file",
+                "esid", esid,
+                "fid", fid).insert();
+    }
+    
 
     public void execWorkflow(Workflow wf) throws DBException
     {
@@ -304,12 +334,19 @@ public class TaskManager
                     try
                     {
                         logger.log("Uploading input files for task " + t.getName() + " to " + r.get("uuid") + "...");
-                        uploadInputFilesForTaskToEsp(t, r.get("esp_hostname"));
-                        logger.log("Done.");
-                        logger.log("Dispatching task " + t.getName() + " to " + r.get("uuid") + "...");
-                        comm.sendMessage(r.get("esp_hostname"), r.getInt("esp_port"), msg);
-                        logger.log("Done.");
-                        Task.updateTaskStatus(t.getDbid(), -1, -1, -1, Task.STATUS_DISPATCHED);
+                        boolean isUploadComplete = uploadInputFilesForTaskToEsp(t, r.get("esp_hostname"));
+                        if(isUploadComplete)
+                        {
+                            logger.log("Done.");
+                            logger.log("Dispatching task " + t.getName() + " to " + r.get("esp_hostname")+":"+r.get("port") + "...");
+                            comm.sendMessage(r.get("esp_hostname"), r.getInt("esp_port"), msg);
+                            logger.log("Done.");
+                            Task.updateTaskStatus(t.getDbid(), -1, -1, -1, Task.STATUS_DISPATCHED);
+                        }
+                        else
+                        {
+                            logger.log("Fail uploading file.");
+                        }
                     }
                     catch (IOException | FileTransferException ex)
                     {
@@ -329,7 +366,7 @@ public class TaskManager
      * @param espHost execution site proxy hostname
      * @throws FileTransferException
      */
-    private void uploadInputFilesForTaskToEsp(Task t, String espHost) throws FileTransferException
+    private boolean uploadInputFilesForTaskToEsp(Task t, String espHost) throws FileTransferException
     {
         //Select input files needed by the task t
         List<DBRecord> files = DBRecord.select(
@@ -363,12 +400,13 @@ public class TaskManager
                     msg.setParam("filename", fname);
                     msg.setParam("dir", dir);
                     msg.setParam("upload_to", espHost);
+                    msg.setParam("fid", f.get("fid"));
                     comm.sendForResponseAsync(r.get("hostname"), r.getInt("port"), addr.getPort(), msg);
                     sentMsgs.add(msg);
                 }
                 catch (IndexOutOfBoundsException ex)
                 {
-                    throw new FileTransferException("Input file is missing.");
+                    throw new FileTransferException("No execution site containing the file "+fname+".");
                 }
                 catch (IOException ex)
                 {
@@ -377,10 +415,20 @@ public class TaskManager
             }
         }
 
+        boolean complete = true;
         for (Message msg : sentMsgs)
         {
-            comm.getResponseMessage(msg);
+            Message res = comm.getResponseMessage(msg);
+            if(!res.getBooleanParam("upload_complete"))
+            {
+                complete = false;
+            }
+            else
+            {
+                insertFileToEsp(msg.getIntParam("fid"), msg.getParam("upload_to"));
+            }
         }
+        return complete;
     }
 
     public ExecSite getExecSite() throws DBException
