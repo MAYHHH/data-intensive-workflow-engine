@@ -1,13 +1,13 @@
 package workflowengine.workflow;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import workflowengine.utils.DBException;
 import workflowengine.utils.DBRecord;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -33,6 +33,10 @@ public class Task implements Serializable
     private char status = STATUS_WAITING;
     private String namespace;
     private String cmd;
+    
+    private LinkedList<WorkflowFile> inputs = new LinkedList<>();
+    private LinkedList<WorkflowFile> outputs = new LinkedList<>();
+    
     private Task(String name, double operations, Workflow wf, String cmd, String namespace)
     {
         this.name = name;
@@ -68,6 +72,10 @@ public class Task implements Serializable
     
     public static Task getWorkflowTaskFromDB(String name, String wfname)
     {
+        if(Utils.isDBEnabled())
+        {
+            throw new RuntimeException("Database is disabled");
+        }
         try
         {
             DBRecord r = DBRecord.select("workflow_task",
@@ -93,6 +101,10 @@ public class Task implements Serializable
     }
     public static Task getWorkflowTaskFromDB(int dbid) throws DBException
     {
+        if(Utils.isDBEnabled())
+        {
+            throw new RuntimeException("Database is disabled");
+        }
         try
         {
             DBRecord r = DBRecord.select("workflow_task",
@@ -177,10 +189,12 @@ public class Task implements Serializable
     
     public void addInputFile(WorkflowFile f)throws DBException
     {
+        inputs.add(f);
         new DBRecord("workflow_task_file", "type", "I", "tid", dbid, "fid", f.getDbid()).insert();
     }
     public void addOutputFile(WorkflowFile f)throws DBException
     {
+        outputs.add(f);
         new DBRecord("workflow_task_file", "type", "O", "tid", dbid, "fid", f.getDbid()).insert();
     }
 
@@ -217,47 +231,62 @@ public class Task implements Serializable
     }
     public WorkflowFile[] getInputFiles() throws DBException
     {
-        List<DBRecord> results = DBRecord.select("workflow_task_file", 
-                new DBRecord("workflow_task_file", 
-                "type", "I", 
-                "tid", dbid));
-        WorkflowFile[] files = new WorkflowFile[results.size()];
-        for (int i=0;i<results.size();i++)
+        if(Utils.isDBEnabled())
         {
-            WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
-            files[i]=f;
+            List<DBRecord> results = DBRecord.select("workflow_task_file", 
+                    new DBRecord("workflow_task_file", 
+                    "type", "I", 
+                    "tid", dbid));
+            WorkflowFile[] files = new WorkflowFile[results.size()];
+            for (int i=0;i<results.size();i++)
+            {
+                WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
+                files[i]=f;
+            }
+            return files;
         }
-        return files;
-    }
-    public String[] getInputFilesString() throws DBException
-    {
-        List<DBRecord> results = DBRecord.select(
-                "SELECT f.name "
-                + "FROM workflow_task_file tf "
-                + "JOIN file f on tf.fid = f.fid "
-                + "WHERE type='I' AND tid='"+dbid+"'");
-        
-        String[] files = new String[results.size()];
-        for (int i=0;i<results.size();i++)
+        else
         {
-            files[i] = results.get(i).get("name");
+            return inputs.toArray(new WorkflowFile[inputs.size()]);
         }
-        return files;
     }
+    
+//    public String[] getInputFilesString() throws DBException
+//    {
+//        List<DBRecord> results = DBRecord.select(
+//                "SELECT f.name "
+//                + "FROM workflow_task_file tf "
+//                + "JOIN file f on tf.fid = f.fid "
+//                + "WHERE type='I' AND tid='"+dbid+"'");
+//        
+//        String[] files = new String[results.size()];
+//        for (int i=0;i<results.size();i++)
+//        {
+//            files[i] = results.get(i).get("name");
+//        }
+//        return files;
+//    }
 
     public WorkflowFile[] getOutputFiles() throws DBException
     {
-        List<DBRecord> results = DBRecord.select("workflow_task_file", 
-                new DBRecord("workflow_task_file", 
-                "type", "O", 
-                "tid", dbid));
-        WorkflowFile[] files = new WorkflowFile[results.size()];
-        for (int i=0;i<results.size();i++)
+        if(Utils.isDBEnabled())
         {
-            WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
-            files[i]=f;
+            List<DBRecord> results = DBRecord.select("workflow_task_file", 
+                    new DBRecord("workflow_task_file", 
+                    "type", "O", 
+                    "tid", dbid));
+            WorkflowFile[] files = new WorkflowFile[results.size()];
+            for (int i=0;i<results.size();i++)
+            {
+                WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
+                files[i]=f;
+            }
+            return files;
         }
-        return files;
+        else
+        {
+            return outputs.toArray(new WorkflowFile[outputs.size()]);
+        }
     }
     
     public WorkflowFile[] getOutputFilesForTask(Task t) 
@@ -278,20 +307,20 @@ public class Task implements Serializable
         return files.toArray(new WorkflowFile[]{});
     }
     
-    public String[] getOutputFilesString() throws DBException
-    {
-        List<DBRecord> results = DBRecord.select(
-                "SELECT f.name "
-                + "FROM workflow_task_file tf "
-                + "JOIN file f on tf.fid = f.fid "
-                + "WHERE type='O' AND tid='"+dbid+"'");
-        String[] files = new String[results.size()];
-        for (int i=0;i<results.size();i++)
-        {
-            files[i] = results.get(i).get("name");
-        }
-        return files;
-    }
+//    public String[] getOutputFilesString() throws DBException
+//    {
+//        List<DBRecord> results = DBRecord.select(
+//                "SELECT f.name "
+//                + "FROM workflow_task_file tf "
+//                + "JOIN file f on tf.fid = f.fid "
+//                + "WHERE type='O' AND tid='"+dbid+"'");
+//        String[] files = new String[results.size()];
+//        for (int i=0;i<results.size();i++)
+//        {
+//            files[i] = results.get(i).get("name");
+//        }
+//        return files;
+//    }
 
     public void setProp(String name, Object o)
     {

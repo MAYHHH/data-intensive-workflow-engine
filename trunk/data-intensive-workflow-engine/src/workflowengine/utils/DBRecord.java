@@ -145,6 +145,10 @@ public class DBRecord
             StringBuilder query = new StringBuilder();
             try
             {
+                if (Utils.getProp("db_disabled").equals("true"))
+                {
+                    return -2;
+                }
                 prepareConnection();
                 query.append("INSERT INTO ");
                 query.append(table);
@@ -182,6 +186,10 @@ public class DBRecord
             StringBuilder query = new StringBuilder();
             try
             {
+                if (Utils.getProp("db_disabled").equals("true"))
+                {
+                    return -2;
+                }
                 prepareConnection();
                 query.append("DELETE FROM ").append(table).append(" WHERE ");
                 for (String key : record.keySet())
@@ -205,6 +213,10 @@ public class DBRecord
             StringBuilder query = new StringBuilder();
             try
             {
+                if (Utils.getProp("db_disabled").equals("true"))
+                {
+                    return -2;
+                }
                 prepareConnection();
                 query.append("UPDATE ").append(table).append(" SET ");
                 for (String key : record.keySet())
@@ -252,6 +264,10 @@ public class DBRecord
         {
             try
             {
+                if (Utils.getProp("db_disabled").equals("true"))
+                {
+                    return -2;
+                }
                 prepareConnection();
                 return con.createStatement().executeUpdate(sql);
             }
@@ -274,6 +290,10 @@ public class DBRecord
 
     public static List<DBRecord> select(String table, DBRecord where)
     {
+        if (Utils.getProp("db_disabled").equals("true"))
+        {
+            return null;
+        }
         prepareConnection();
         StringBuilder query = new StringBuilder();
         query.append("SELECT * FROM ").append(table);
@@ -289,6 +309,10 @@ public class DBRecord
     {
         synchronized (DB_LOCKER)
         {
+            if (Utils.getProp("db_disabled").equals("true"))
+            {
+                return null;
+            }
             prepareConnection();
             try
             {
@@ -325,12 +349,12 @@ public class DBRecord
         sb.delete(sb.length() - 2, sb.length());
         return sb.toString();
     }
-    
+
     public static void main(String[] args)
     {
-        for(DBRecord rec : DBRecord.select("workflow_task_file", 
-                new DBRecord("workflow_task_file", 
-                "type", "O", 
+        for (DBRecord rec : DBRecord.select("workflow_task_file",
+                new DBRecord("workflow_task_file",
+                "type", "O",
                 "tid", 4)))
         {
             WorkflowFile wf = WorkflowFile.getFileFromDB(rec.getInt("fid"));

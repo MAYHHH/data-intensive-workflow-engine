@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import workflowengine.communication.HostAddress;
 import workflowengine.resource.ExecSite;
 import workflowengine.resource.Worker;
 import workflowengine.workflow.Task;
@@ -29,13 +30,7 @@ public class SchedulerSettings
     private final int totalTasks;
     private final int totalWorkers;
     private final Set<Task> fixedTasks;
-    private Iterable<Task> taskIterable = new Iterable<Task>() {
-        @Override
-        public Iterator<Task> iterator()
-        {
-            return taskList.iterator();
-        }
-    };
+    private HashMap<String, Object> params = new HashMap<>();
     
     public SchedulerSettings(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
     {
@@ -152,4 +147,49 @@ public class SchedulerSettings
     {
         return es.getWorkerIterable();
     }
+    
+    
+    public String getParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : o.toString();
+    }
+    public char getCharParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : (char)o;
+    }
+
+    public Object getObjectParam(String s)
+    {
+        return params.get(s);
+    }
+    
+    public double getDoubleParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : Double.parseDouble(o.toString());
+    }
+    public int getIntParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : Integer.parseInt(o.toString());
+    }
+
+    public boolean getBooleanParam(String s)
+    {
+        Object o = params.get(s);
+        return o == null ? null : Boolean.parseBoolean(o.toString());
+    }
+    
+    public void setParam(String s, Object o)
+    {
+        params.put(s, o);
+    }
+    
+    public boolean hasParam(String s)
+    {
+        return params.containsKey(s);
+    }
+    
 }
