@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
-import workflowengine.communication.HostAddress;
 import workflowengine.resource.ExecSite;
 import workflowengine.resource.Worker;
 import workflowengine.workflow.Task;

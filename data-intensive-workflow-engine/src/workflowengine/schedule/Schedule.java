@@ -63,7 +63,7 @@ public class Schedule
 //    }
 
     //Copy constructor
-    private Schedule(Schedule sch)
+    protected Schedule(Schedule sch)
     {
 //        this.r = sch.r;
 //        this.wf = sch.wf;

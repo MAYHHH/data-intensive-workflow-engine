@@ -44,6 +44,10 @@ public class Worker
 
     public static Worker getWorkerFromDB(String uuid)
     {
+        if(!Utils.isDBEnabled())
+        {
+            throw new RuntimeException("Database is disabled.");
+        }
         try
         {
             DBRecord r = DBRecord.select("worker",
@@ -94,6 +98,10 @@ public class Worker
 
     public static void updateWorkerStatus(HostAddress espAddr, HostAddress workerAddr, int currentTid, double freeMem, double freeStorage, double cpu, String uuid)
     {
+        if(!Utils.isDBEnabled())
+        {
+            throw new RuntimeException("Database is disabled.");
+        }
         Worker w = getWorkerFromDB(uuid);
         if (w == null)
         {
