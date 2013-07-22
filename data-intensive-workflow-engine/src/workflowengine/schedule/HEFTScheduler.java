@@ -71,7 +71,7 @@ public class HEFTScheduler implements Scheduler
                 for(Task p : settings.getWf().getParentTasks(t))
                 {
                     Worker parentWorker = s.getWorkerForTask(p);
-                    double commTime = parentWorker.equalTo(w) ? 0 : settings.getEs().getTransferTime(parentWorker, w, p.getOutputFilesForTask(t));
+                    double commTime = parentWorker.equals(w) ? 0 : settings.getEs().getTransferTime(parentWorker, w, p.getOutputFilesForTask(t));
                     parentFinTime = Math.max(parentFinTime, taskFinishTime.get(p)+commTime);
                 }
                 double finTime = Math.max(parentFinTime, workerReadyTime.get(w))+w.getExecTime(t);
