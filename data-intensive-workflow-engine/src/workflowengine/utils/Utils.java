@@ -40,7 +40,18 @@ public class Utils
         return PROP;
     }
     
-    
+    public static void disableDB()
+    {
+        PROP.setProperty("db_disabled", "true");
+    }
+    public static void enableDB()
+    {
+        PROP.setProperty("db_disabled", "false");
+    }
+    public static boolean isDBEnabled()
+    {
+        return !PROP.getProperty("db_disabled").equals("true");
+    }
     
     public static void initProp()
     {
@@ -52,6 +63,7 @@ public class Utils
                 PROP.load(is);
                 is.close();
                 PROP.setProperty("home_dir", System.getProperty("user.home"));
+                enableDB();
                 isPropInited = true;
             }
             catch (IOException ex)
