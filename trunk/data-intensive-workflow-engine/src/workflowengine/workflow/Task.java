@@ -72,7 +72,7 @@ public class Task implements Serializable
     
     public static Task getWorkflowTaskFromDB(String name, String wfname)
     {
-        if(Utils.isDBEnabled())
+        if(!Utils.isDBEnabled())
         {
             throw new RuntimeException("Database is disabled");
         }
@@ -101,7 +101,7 @@ public class Task implements Serializable
     }
     public static Task getWorkflowTaskFromDB(int dbid) throws DBException
     {
-        if(Utils.isDBEnabled())
+        if(!Utils.isDBEnabled())
         {
             throw new RuntimeException("Database is disabled");
         }
