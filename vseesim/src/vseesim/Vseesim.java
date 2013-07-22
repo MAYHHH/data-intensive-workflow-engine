@@ -2,8 +2,13 @@
 package vseesim;
 
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.PriorityQueue;
 import java.util.Random;
+import workflowengine.resource.Worker;
+import workflowengine.schedule.Schedule;
+import workflowengine.workflow.Task;
+import workflowengine.workflow.Workflow;
 
 /**
  *
@@ -137,4 +142,36 @@ public class Vseesim
         partitionMapping.put(p5, m1);
         init();
     }
+    
+    public HashMap<Task, LinkedList<Task>> Partition(Workflow w, Schedule s)
+    {
+         HashMap<Task, LinkedList<Task>> groups = new HashMap<>();
+         LinkedList<Task> q = new LinkedList<>();
+         q.add(w.getStartTask());
+         while (!q.isEmpty())
+         {
+             Task node = q.poll();
+             LinkedList<Task> group = null;
+             Worker wk = s.getWorkerForTask(node);
+             for (Task Parent : w.getParentTasks(node))
+             {
+                 Worker wkp = s.getWorkerForTask(Parent);
+                 if (wk.equals(wkp))
+                 {
+                     group = groups.get(Parent);
+                 }
+                 
+             }
+             if (group == null)
+             {
+                 group = new LinkedList<>();
+                 group.add(node);
+                 groups.put(node, group);
+             }
+             q.addAll(w.getChildTasks(node));
+            
+         }
+             return groups;
+    }
+    
 }
