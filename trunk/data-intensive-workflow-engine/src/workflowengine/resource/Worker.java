@@ -118,7 +118,8 @@ public class Worker
         return dbid;
     }
 
-    public boolean equalTo(Object o)
+    @Override
+    public boolean equals(Object o)
     {
         if (o instanceof Worker)
         {
