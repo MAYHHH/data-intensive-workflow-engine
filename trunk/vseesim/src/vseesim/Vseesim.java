@@ -165,9 +165,10 @@ public class Vseesim
              if (group == null)
              {
                  group = new LinkedList<>();
-                 group.add(node);
-                 groups.put(node, group);
+                 
              }
+             group.add(node);
+             groups.put(node, group);
              q.addAll(w.getChildTasks(node));
             
          }
