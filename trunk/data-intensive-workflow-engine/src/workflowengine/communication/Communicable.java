@@ -10,10 +10,13 @@ package workflowengine.communication;
  */
 import java.io.*;
 import java.net.*;
+import java.util.LinkedList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import workflowengine.utils.simplegraph.SimpleGraph;
 import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
+import workflowengine.utils.simplegraph.SimpleGraphNode;
 
 public class Communicable
 {

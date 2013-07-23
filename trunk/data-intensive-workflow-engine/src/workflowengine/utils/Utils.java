@@ -258,4 +258,28 @@ public class Utils
         return new File(filePath).getParent();
     }
     
+    
+    public static String[] getAllfilesInDir(String dirPath)
+    {
+        File file = new File(dirPath);
+        LinkedList<String> fileList = new LinkedList<>();
+        LinkedList<File> q = new LinkedList<>();
+        q.push(file);
+        while(!q.isEmpty())
+        {
+            File f = q.pop();
+            if(f.isDirectory())
+            {
+                for(File childFile : f.listFiles())
+                {
+                    q.push(childFile);
+                }
+            }
+            else
+            {
+                fileList.add(f.getAbsolutePath());
+            }
+        }
+        return fileList.toArray(new String[]{});
+    }
 }
