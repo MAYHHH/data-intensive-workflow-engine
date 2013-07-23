@@ -24,7 +24,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
-import javax.print.DocFlavor;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -36,6 +35,7 @@ import workflowengine.TaskManager;
 import workflowengine.utils.DBException;
 import workflowengine.utils.DBRecord;
 import workflowengine.utils.Utils;
+import workflowengine.utils.XMLUtils;
 
 /**
  *
@@ -222,6 +222,7 @@ public class Workflow implements Serializable
             DocumentBuilder db = dbf.newDocumentBuilder();
             Document dom = db.parse(filename);
             Element docEle = dom.getDocumentElement();
+            String namespace = docEle.getAttribute("name");
             NodeList jobNodeList = docEle.getElementsByTagName("job");
 
             HashMap<Integer, Task> tasks = new HashMap<>();
@@ -230,12 +231,15 @@ public class Workflow implements Serializable
                 for (int i = 0; i < jobNodeList.getLength(); i++)
                 {
                     Element jobElement = (Element) jobNodeList.item(i);
+                    
                     String idString = jobElement.getAttribute("id");
                     int id = Integer.parseInt(idString.substring(2));
-                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
+//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
+                    double runtime = 1;
+
                     String taskName = jobElement.getAttribute("name");
-                    String taskNameSpace = jobElement.getAttribute("namespace");
-                    Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", taskNameSpace);
+//                    String taskNameSpace = jobElement.getAttribute("namespace");
+                    Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", namespace);
                     StringBuilder cmdBuilder = new StringBuilder();
                     cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);
@@ -244,10 +248,14 @@ public class Workflow implements Serializable
                     for (int j = 0; j < fileNodeList.getLength(); j++)
                     {
                         Element fileElement = (Element) fileNodeList.item(j);
-                        String fname = fileElement.getAttribute("file");
+//                        String fname = fileElement.getAttribute("file");
+                        String fname = fileElement.getAttribute("name");
                         String fiotype = fileElement.getAttribute("link");
-                        char ftype = fileElement.getAttribute("type").equals("dir") ? WorkflowFile.TYPE_DIRECTIORY:WorkflowFile.TYPE_FILE;
-                        double fsize = Double.parseDouble(fileElement.getAttribute("size"));
+//                        char ftype = fileElement.getAttribute("type").equals("dir") ? WorkflowFile.TYPE_DIRECTIORY:WorkflowFile.TYPE_FILE;
+                        char ftype = WorkflowFile.TYPE_FILE;
+
+//                        double fsize = Double.parseDouble(fileElement.getAttribute("size"));
+                        double fsize = 1;
                         WorkflowFile wfile = WorkflowFile.getFile(fname, fsize, ftype);
                         if (fiotype.equals("input"))
                         {
@@ -266,7 +274,8 @@ public class Workflow implements Serializable
                     }
                     cmdBuilder.deleteCharAt(cmdBuilder.length()-1);
                     
-                    String cmd = jobElement.getAttribute("cmd");
+//                    String cmd = jobElement.getAttribute("cmd");
+                    String cmd = XMLUtils.argumentTagToCmd(jobElement);
                     if(cmd == null)
                     {
                         task.setCmd(cmdBuilder.toString());
@@ -306,6 +315,7 @@ public class Workflow implements Serializable
         }
         catch (ParserConfigurationException | SAXException | IOException | NumberFormatException e)
         {
+            e.printStackTrace();
             throw new RuntimeException(e.getMessage());
         }
         wf.addStartAndEndTask();
@@ -462,6 +472,7 @@ public class Workflow implements Serializable
     public static void main(String[] args) throws DBException, FileNotFoundException
     {
         Utils.disableDB();
-        fromDAX("C:\\Documents and Settings\\udomo\\My Documents\\Downloads\\we\\workflows\\Montage_12.xml");
+        Workflow wf = fromDAX("C:\\Documents and Settings\\udomo\\My Documents\\Downloads\\we\\workflows\\Montage_143.xml");
+        
     }
 }
