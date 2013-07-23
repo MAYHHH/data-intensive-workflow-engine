@@ -7,6 +7,7 @@ package workflowengine.workflow;
 import java.io.Serializable;
 import workflowengine.utils.DBException;
 import workflowengine.utils.DBRecord;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -31,7 +32,11 @@ public class WorkflowFile implements Serializable
     }
     public static WorkflowFile getFile(String name, double size, char type) throws DBException
     {
-        WorkflowFile f = getFileFromDB(name);
+        WorkflowFile f = null;
+        if(Utils.isDBEnabled())
+        {
+            f = getFileFromDB(name);
+        }
         if(f == null)
         {
             f = new WorkflowFile(name, size, type);
@@ -46,6 +51,10 @@ public class WorkflowFile implements Serializable
     
     public static WorkflowFile getFileFromDB(String name)
     {
+        if(!Utils.isDBEnabled())
+        {
+            throw new RuntimeException("Database is disabled.");
+        }
         WorkflowFile f;
         try
         {

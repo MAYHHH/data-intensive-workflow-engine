@@ -4,7 +4,7 @@
  */
 package workflowengine;
 
-import com.zehon.exception.FileTransferException;
+import workflowengine.communication.FileTransferException;
 import com.zehon.sftp.SFTPClient;
 import java.io.File;
 import java.io.IOException;
@@ -208,7 +208,9 @@ public class TaskExecutor
     {
         String cmdPrefix = Utils.getProp("command_prefix");
         StringBuilder cmd = new StringBuilder();
-        cmd.append(cmdPrefix).append(currentWorkingDir).append(msg.getParam("cmd"));
+        currentProcName = msg.getParam("cmd").split(";")[0];
+
+        cmd.append(cmdPrefix).append(currentWorkingDir).append(msg.getParam("task_namespace")).append("/").append(msg.getParam("cmd"));
         if (msg.getParam("migrate") != null)
         {
             cmd.append(";-_condor_restart;").append(currentTaskName).append(".ckpt");
@@ -224,23 +226,25 @@ public class TaskExecutor
     private void downloadInputFiles(Message msg) throws FileTransferException
     {
         WorkflowFile[] files = (WorkflowFile[]) msg.getObjectParam("input_files");
-        String remoteDir = msg.getParam("file_dir");
-        String espHost = Utils.getProp("exec_site_proxy_host");
-        SFTPClient client = SFTPUtils.getSFTP(espHost);
+        String fromRemoteDir = msg.getParam("file_dir");
+//        String espHost = Utils.getProp("exec_site_proxy_host");
+//        SFTPClient client = SFTPUtils.getSFTP(espHost);
         for (WorkflowFile f : files)
         {
-            logger.log("Downloading input files "+f.getName()+" for " + currentTaskName + "...");
-            String localFilePath = currentWorkingDir + f.getName();
+            logger.log("Downloading input files " + f.getName() + " for " + currentTaskName + "...");
             try
             {
                 if (f.getType() == WorkflowFile.TYPE_DIRECTIORY)
                 {
-                    Utils.createDir(localFilePath);
-                    client.getFolder(remoteDir + f.getName(), localFilePath, null);
+                    String localFileDir = Utils.getParentPath(currentWorkingDir + f.getName());
+//                    Utils.createDir(localFilePath);
+                    comm.getDir(espAddr.getHost(), espAddr.getPort(), fromRemoteDir + f.getName(), localFileDir);
+//                    client.getFolder(remoteDir + f.getName(), localFilePath, null);
                 }
                 else
                 {
-                    client.getFile(f.getName(), remoteDir, currentWorkingDir);
+                    comm.getFile(espAddr.getHost(), espAddr.getPort(), fromRemoteDir + f.getName(), currentWorkingDir + f.getName());
+//                    client.getFile(f.getName(), remoteDir, currentWorkingDir);
                 }
             }
             catch (FileTransferException ex)
@@ -256,11 +260,11 @@ public class TaskExecutor
     {
         WorkflowFile[] files = (WorkflowFile[]) msg.getObjectParam("output_files");
         String remoteDir = msg.getParam("file_dir");
-        String espHost = Utils.getProp("exec_site_proxy_host");
-        SFTPClient client = SFTPUtils.getSFTP(espHost);
+//        String espHost = Utils.getProp("exec_site_proxy_host");
+//        SFTPClient client = SFTPUtils.getSFTP(espHost);
         for (WorkflowFile f : files)
         {
-            logger.log("Uploading output files "+f.getName()+" from task " + currentTaskName + "...");
+            logger.log("Uploading output files " + f.getName() + " from task " + currentTaskName + "...");
             String localFilePath = currentWorkingDir + f.getName();
 
             try
@@ -268,15 +272,17 @@ public class TaskExecutor
                 if (Utils.isDir(localFilePath))
                 {
 //                String dir = new File(remoteDir+f.getName()).getParent();
-                    String dir = remoteDir + f.getName();
-                    SFTPUtils.createFolderPath(client, dir);
-                    client.sendFolder(localFilePath, dir, null);
+//                    String dir = remoteDir + f.getName();
+//                    SFTPUtils.createFolderPath(client, dir);
+//                    client.sendFolder(localFilePath, dir, null);
+                    comm.sendDir(espAddr.getHost(), espAddr.getPort(), remoteDir, localFilePath);
                 }
                 else
                 {
-                    String dir = new File(remoteDir + f.getName()).getParent();
-                    SFTPUtils.createFolderPath(client, dir);
-                    client.sendFile(localFilePath, dir);
+//                    String dir = new File(remoteDir + f.getName()).getParent();
+//                    SFTPUtils.createFolderPath(client, dir);
+//                    client.sendFile(localFilePath, dir);
+                    comm.sendFile(espAddr.getHost(), espAddr.getPort(), remoteDir + f.getName(), localFilePath);
                 }
             }
             catch (FileTransferException ex)
@@ -302,12 +308,16 @@ public class TaskExecutor
     private void downloadExecutable(Message msg) throws FileTransferException
     {
         String namespace = msg.getParam("task_namespace");
-        if (!Utils.isFileExist(currentWorkingDir + namespace + "/"))
+        String dir = currentWorkingDir + namespace + "/";
+        if (!Utils.isFileExist(dir))
         {
-            long time = System.currentTimeMillis();
-            SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
-                    .getFolder(Utils.getProp("code_repository_dir") + namespace + "/", currentWorkingDir, null);
-            Utils.setExecutableInDirSince(currentWorkingDir, time);
+//            long time = System.currentTimeMillis();
+            Utils.createDir(dir);
+            comm.getDir(Utils.getProp("code_repository_host"), espAddr.getPort(), Utils.getProp("code_repository_dir") + namespace + "/", currentWorkingDir);
+
+//            SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
+//                    .getFolder(Utils.getProp("code_repository_dir") + namespace + "/", currentWorkingDir, null);
+            Utils.setExecutableInDirSince(dir, -1);
         }
 
 
@@ -317,13 +327,13 @@ public class TaskExecutor
 //        new File(currentWorkingDir+execName).setExecutable(true);
     }
 
-    private Process startProcess(String[] cmds) throws IOException
+    private Process startProcess(String[] cmds, Message msg) throws IOException
     {
         ProcessBuilder pb = new ProcessBuilder(cmds).directory(new File(
                 currentWorkingDir));
         pb.redirectError(new File(currentWorkingDir + currentTaskName + ".stderr"));
         pb.redirectOutput(new File(currentWorkingDir + currentTaskName + ".stdout"));
-        String path = pb.environment().get("PATH") + ":" + currentWorkingDir;
+        String path = pb.environment().get("PATH") + ":" + currentWorkingDir+":"+currentWorkingDir+msg.getParam("task_namespace");
         pb.environment().put("PATH", path);
         currentTaskStart = Utils.time();
         logger.log("Starting execution of task " + currentTaskName + ".");
@@ -366,11 +376,11 @@ public class TaskExecutor
         currentRequestMsg = msg;
         currentTaskName = msg.getParam("task_name");
         String[] cmds = prepareCmd(msg);
-        currentProcName = cmds[0];
         currentTaskDbid = msg.getIntParam("tid");
         prepareDirectory(msg);
         downloadInputFiles(msg);
         downloadExecutable(msg);
+        Utils.setExecutable(currentWorkingDir + currentProcName);
         return cmds;
     }
 
@@ -385,7 +395,7 @@ public class TaskExecutor
             isSuspensed = false;
             status = STATUS_BUSY;
             String[] cmds = prepareExecutionAndGetCommands(msg);
-            Process proc = startProcess(cmds);
+            Process proc = startProcess(cmds, msg);
 
             //Send task status to manager that the task is started
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);

@@ -4,13 +4,12 @@
  */
 package workflowengine;
 
-import com.zehon.exception.FileTransferException;
+import workflowengine.communication.FileTransferException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.logging.Level;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
@@ -23,7 +22,6 @@ import workflowengine.schedule.Scheduler;
 import workflowengine.schedule.SchedulerSettings;
 import workflowengine.utils.DBException;
 import workflowengine.utils.Logger;
-import workflowengine.utils.SFTPUtils;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.Task;
@@ -227,7 +225,8 @@ public class TaskManager
         String remoteInputFileDir = Utils.getProp("exec_site_file_storage_dir") + w.getWorkingDirSuffix();
         try
         {
-            SFTPUtils.getSFTP(nearestEsp.getHost()).sendFolder(inputFileDir, remoteInputFileDir, null);
+//            SFTPUtils.getSFTP(nearestEsp.getHost()).sendFolder(inputFileDir, remoteInputFileDir, null);
+            comm.sendFilesInDir(nearestEsp.getHost(), nearestEsp.getPort(), remoteInputFileDir, inputFileDir);
         }
         catch (FileTransferException ex)
         {
@@ -401,7 +400,9 @@ public class TaskManager
                     msg.setParam("dir", dir);
                     msg.setParam("upload_to", espHost);
                     msg.setParam("fid", f.get("fid"));
+                    logger.log("Request file "+fname+" from "+r.get("hostname")+ " to "+espHost);
                     comm.sendForResponseAsync(r.get("hostname"), r.getInt("port"), addr.getPort(), msg);
+                    logger.log("Done");
                     sentMsgs.add(msg);
                 }
                 catch (IndexOutOfBoundsException ex)

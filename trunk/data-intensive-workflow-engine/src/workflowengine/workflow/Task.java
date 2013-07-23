@@ -61,7 +61,11 @@ public class Task implements Serializable
     
     public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd, String namespace)
     {
-        Task t = getWorkflowTaskFromDB(name, wf.getName());
+        Task t = null;
+        if(Utils.isDBEnabled())
+        {
+            t = getWorkflowTaskFromDB(name, wf.getName());
+        }
         if(t == null)
         {
             t = new Task(name, operations, wf, cmd, namespace);
@@ -205,7 +209,7 @@ public class Task implements Serializable
 
     public String getName()
     {
-        return toString();
+        return name;
     }
 
     public String getNamespace()

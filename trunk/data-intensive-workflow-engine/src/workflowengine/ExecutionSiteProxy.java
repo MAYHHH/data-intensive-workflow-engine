@@ -4,13 +4,11 @@
  */
 package workflowengine;
 
-import com.zehon.exception.FileTransferException;
-import com.zehon.sftp.SFTPClient;
+import workflowengine.communication.FileTransferException;
 import java.io.IOException;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
-import workflowengine.utils.SFTPUtils;
 import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
 
@@ -185,20 +183,23 @@ public class ExecutionSiteProxy
     {
         Message response = new Message(Message.TYPE_RESPONSE_TO_MANAGER);
         String filename = msg.getParam("filename");
+//        String remoteDir = msg.getParam("dir");
         String dir = msg.getParam("dir");
         String filepath = dir+filename;
         try
         {
             String uploadTo = msg.getParam("upload_to");
-            SFTPClient client = SFTPUtils.getSFTP(uploadTo);
+//            SFTPClient client = SFTPUtils.getSFTP(uploadTo);
             logger.log("Sending file "+filepath+" to "+ uploadTo);
             if(Utils.isDir(filepath))
             {
-                client.sendFolder(filepath, filepath, null);
+//                client.sendFolder(filepath, filepath, null);
+                comm.sendDir(uploadTo, addr.getPort(), dir, filepath);
             }
             else
             {
-                client.sendFile(filepath, dir);
+//                client.sendFile(filepath, remoteDir);
+                comm.sendFile(uploadTo, addr.getPort(), filepath, filepath);
             }
             logger.log("Done.");
             response.setParam("upload_complete", true);
@@ -206,7 +207,7 @@ public class ExecutionSiteProxy
         }
         catch (FileTransferException ex)
         {
-            logger.log("Cannot upload file "+dir+filename+" to "+ msg.getParam("upload_to")+".", ex);
+            logger.log("Cannot upload file "+filepath+" to "+ msg.getParam("upload_to")+".", ex);
             response.setParam("upload_complete", false);
         }
         try

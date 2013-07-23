@@ -8,6 +8,7 @@ import edu.uci.ics.jung.graph.DirectedSparseGraph;
 import edu.uci.ics.jung.graph.util.EdgeType;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -15,6 +16,7 @@ import java.util.LinkedList;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -217,7 +219,7 @@ public class Workflow implements Serializable
                     double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
                     String taskName = jobElement.getAttribute("name");
                     String taskNameSpace = jobElement.getAttribute("namespace");
-                    Task task = Task.getWorkflowTask("("+idString+")"+taskName, runtime, wf, "", taskNameSpace);
+                    Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", taskNameSpace);
                     StringBuilder cmdBuilder = new StringBuilder();
                     cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);
@@ -383,8 +385,66 @@ public class Workflow implements Serializable
         return "wf_"+dbid+"/";
     }
     
-    public static void main(String[] args)
+    public void toFile(String filename) throws FileNotFoundException
     {
-        fromDAX(args[0]);
+        PrintWriter pw = new PrintWriter(filename);
+        pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        HashMap<Task, Integer> taskMap = new HashMap<>(tasks.size());
+        for(int i=0;i<tasks.size();i++)
+        {
+            Task t = tasks.get(i);
+            taskMap.put(t, i);
+            pw.printf("\t<job id=\"ID%05d\" "
+                    + "namespace=\"Montage\" "
+                    + "name=\"%s\" "
+                    + "cmd=\"%s\" "
+                    + "version=\"1.0\" "
+                    + "runtime=\"%f\">\n",
+                    i, t.getName(), t.getCmd(), t.getOperations());
+            for(WorkflowFile f : t.getInputFiles())
+            {
+                String type = f.getType() == WorkflowFile.TYPE_DIRECTIORY ? "dir" : "file";
+                pw.printf("\t\t<uses "
+                        + "type=\"%s\" "
+                        + "file=\"%s\" "
+                        + "link=\"input\" "
+                        + "size=\"%f\"/>\n"
+                        ,type, f.getName(), f.getSize());
+            }
+            for(WorkflowFile f : t.getOutputFiles())
+            {
+                String type = f.getType() == WorkflowFile.TYPE_DIRECTIORY ? "dir" : "file";
+                pw.printf("\t\t<uses "
+                        + "type=\"%s\" "
+                        + "file=\"%s\" "
+                        + "link=\"output\" "
+                        + "size=\"%f\"/>\n"
+                        ,type, f.getName(), f.getSize());
+            }
+            pw.println("\t</job>");
+        }
+        for(int i=0;i<tasks.size();i++)
+        {
+            Task t = tasks.get(i);
+            Collection<Task> parents = getParentTasks(t);
+            if(parents.isEmpty())
+            {
+                continue;
+            }
+            pw.printf("\t<child ref=\"ID%05d\">\n", taskMap.get(t));
+            for(Task p : parents)
+            {
+                pw.printf("\t\t<parent ref=\"ID%05d\"/>\n", taskMap.get(p));
+            }
+            pw.println("\t</child>");
+        }
+        pw.println("</adag>");
+        pw.close();
+    }
+    
+    
+    public static void main(String[] args) throws DBException, FileNotFoundException
+    {
+        
     }
 }

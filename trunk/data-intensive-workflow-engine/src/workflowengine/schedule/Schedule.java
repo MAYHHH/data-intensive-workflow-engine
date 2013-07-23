@@ -1,11 +1,7 @@
 package workflowengine.schedule;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
-import workflowengine.resource.ExecSite;
 import workflowengine.resource.Worker;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.Task;
