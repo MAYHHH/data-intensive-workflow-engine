@@ -20,9 +20,11 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import javax.print.DocFlavor;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -48,8 +50,8 @@ public class Workflow implements Serializable
     private ArrayList<Task> tasks = new ArrayList<>();
     private DirectedSparseGraph<Task, String> graph = new DirectedSparseGraph<>();
     private String name = "";
-    private LinkedList<WorkflowFile> inputFiles = new LinkedList<>();
-    private LinkedList<WorkflowFile> outputFiles = new LinkedList<>();
+    private HashSet<WorkflowFile> inputFiles = new HashSet<>();
+    private HashSet<WorkflowFile> outputFiles = new HashSet<>();
 
     public Workflow(String name) throws DBException
     {
@@ -126,7 +128,21 @@ public class Workflow implements Serializable
         new DBRecord("workflow_task_depen", "wfid", dbid, "parent", from.getDbid(), "child", to.getDbid()).insert();
     }
 
-    public void finalizeWorkflow() throws DBException
+    public void generateFileSet()
+    {
+        HashSet<WorkflowFile> newInputFiles = new HashSet<>(inputFiles);
+        for(WorkflowFile f : inputFiles)
+        {
+            if(outputFiles.contains(f))
+            {
+                newInputFiles.remove(f);
+                outputFiles.remove(f);
+            }
+        }
+        inputFiles = newInputFiles;
+    }
+    
+    public void addStartAndEndTask() throws DBException
     {
         //Add START and END task if neccessary
         LinkedList<Task> startTasks = new LinkedList<>();
@@ -238,14 +254,12 @@ public class Workflow implements Serializable
                             cmdBuilder.append("i;");
                             task.addInputFile(wfile);
                             wf.inputFiles.add(wfile);
-                            wf.outputFiles.remove(wfile);
                         }
                         else
                         {
                             cmdBuilder.append("o;");
                             task.addOutputFile(wfile);
                             wf.outputFiles.add(wfile);
-                            wf.inputFiles.remove(wfile);
                         }
                         cmdBuilder.append(fname).append(";");
                         cmdBuilder.append(fsize).append(";");
@@ -264,6 +278,7 @@ public class Workflow implements Serializable
                 }
             }
 
+            
             //Read dependencies
             jobNodeList = docEle.getElementsByTagName("child");
             if (jobNodeList != null && jobNodeList.getLength() > 0)
@@ -293,7 +308,8 @@ public class Workflow implements Serializable
         {
             throw new RuntimeException(e.getMessage());
         }
-        wf.finalizeWorkflow();
+        wf.addStartAndEndTask();
+        wf.generateFileSet();
         wf.prepareWorkingDirectory();
 //        wf.createDummyInputFiles();
         wf.save(Utils.getProp("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
@@ -445,6 +461,7 @@ public class Workflow implements Serializable
     
     public static void main(String[] args) throws DBException, FileNotFoundException
     {
-        
+        Utils.disableDB();
+        fromDAX("C:\\Documents and Settings\\udomo\\My Documents\\Downloads\\we\\workflows\\Montage_12.xml");
     }
 }

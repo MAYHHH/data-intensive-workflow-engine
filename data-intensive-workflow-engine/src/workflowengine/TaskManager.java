@@ -86,7 +86,7 @@ public class TaskManager
         comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_MANAGER);
         comm.setLocalPort(addr.getPort());
         comm.startServer();
-//        startDispatchThread();
+        startDispatchThread();
     }
 
     public static TaskManager startService()
