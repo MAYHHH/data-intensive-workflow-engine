@@ -31,11 +31,11 @@ public class SFTPUtils
             isSFTPInited = true;
         }
     }
-    public static SFTPClient getSFTP(String host)
-    {
-        init();
-        return new SFTPClient(host,sshUser, sshPass);
-    }
+//    public static SFTPClient getSFTP(String host)
+//    {
+//        init();
+//        return new SFTPClient(host,sshUser, sshPass);
+//    }
     
     public static void createFolderPath(SFTPClient client, String folderPath) throws FileTransferException
     {
