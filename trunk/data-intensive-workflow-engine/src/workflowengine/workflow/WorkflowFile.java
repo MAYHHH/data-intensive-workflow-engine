@@ -5,6 +5,7 @@
 package workflowengine.workflow;
 
 import java.io.Serializable;
+import java.util.Objects;
 import workflowengine.utils.DBException;
 import workflowengine.utils.DBRecord;
 import workflowengine.utils.Utils;
@@ -106,8 +107,30 @@ public class WorkflowFile implements Serializable
         return dbid;
     }
 
+    @Override
     public String toString()
     {
         return "["+type+"]"+name+"("+dbid+"):"+size+"MB";
     }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        if(!(obj instanceof WorkflowFile))
+        {
+            return false;
+        }
+        WorkflowFile f = (WorkflowFile)obj;
+        return this.name.equals(f.name);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        int hash = 7;
+        hash = 41 * hash + Objects.hashCode(this.name);
+        return hash;
+    }
+    
+    
 }

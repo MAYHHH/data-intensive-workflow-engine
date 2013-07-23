@@ -35,7 +35,7 @@ public class Utils
     private static final Properties PROP = new Properties();
     private static final String CONFIG_FILE = "default.properties";
     private static boolean isPropInited = false;
-    private static final int BUFFER_LEN = 512*1024; //length of buffer in bytes
+    private static final int BUFFER_LEN = 1024*1024; //length of buffer in bytes
 
     public static void main(String[] args)
     {
@@ -204,10 +204,14 @@ public class Utils
     public static void pipe(InputStream in, OutputStream out) throws IOException
     {
         byte[] buffer = new byte[BUFFER_LEN];
-        int len;
-        while ((len = in.read(buffer)) > 0)
+        int len = 1;
+        while (len > -1)
         {
-            out.write(buffer, 0, len);
+            len = in.read(buffer);
+            if(len > -1)
+            {
+                out.write(buffer, 0, len);
+            }
         }
     }
     
@@ -231,6 +235,10 @@ public class Utils
     
     public static String[] getfileListInDir(String dirPath)
     {
+        if(!Utils.isFileExist(dirPath))
+        {
+            return new String[0];
+        }
         File file = new File(dirPath).getAbsoluteFile();
         LinkedList<String> fileList = new LinkedList<>();
         LinkedList<File> q = new LinkedList<>();
@@ -282,4 +290,6 @@ public class Utils
         }
         return fileList.toArray(new String[]{});
     }
+    
+    
 }

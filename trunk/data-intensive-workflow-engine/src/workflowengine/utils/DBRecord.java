@@ -145,7 +145,7 @@ public class DBRecord
             StringBuilder query = new StringBuilder();
             try
             {
-                if (Utils.getProp("db_disabled").equals("true"))
+                if (!Utils.isDBEnabled())
                 {
                     return -2;
                 }
@@ -186,7 +186,7 @@ public class DBRecord
             StringBuilder query = new StringBuilder();
             try
             {
-                if (Utils.getProp("db_disabled").equals("true"))
+                if (!Utils.isDBEnabled())
                 {
                     return -2;
                 }
@@ -213,7 +213,7 @@ public class DBRecord
             StringBuilder query = new StringBuilder();
             try
             {
-                if (Utils.getProp("db_disabled").equals("true"))
+                if (!Utils.isDBEnabled())
                 {
                     return -2;
                 }
@@ -264,7 +264,7 @@ public class DBRecord
         {
             try
             {
-                if (Utils.getProp("db_disabled").equals("true"))
+                if (!Utils.isDBEnabled())
                 {
                     return -2;
                 }
@@ -290,7 +290,7 @@ public class DBRecord
 
     public static List<DBRecord> select(String table, DBRecord where)
     {
-        if (Utils.getProp("db_disabled").equals("true"))
+        if (!Utils.isDBEnabled())
         {
             return null;
         }
@@ -309,7 +309,7 @@ public class DBRecord
     {
         synchronized (DB_LOCKER)
         {
-            if (Utils.getProp("db_disabled").equals("true"))
+            if (!Utils.isDBEnabled())
             {
                 return null;
             }

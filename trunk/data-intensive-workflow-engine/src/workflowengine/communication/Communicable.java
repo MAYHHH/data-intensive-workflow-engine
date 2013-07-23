@@ -359,6 +359,7 @@ public class Communicable
                     FileOutputStream fos = new FileOutputStream(file);
                     Utils.pipe(sis, fos);
                     fos.close();
+                    
                     break;
                 case MSG_FILE_MSG_TYPE_LIST:
                     ObjectOutputStream oos = new ObjectOutputStream(sos);
