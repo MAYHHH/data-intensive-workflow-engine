@@ -208,6 +208,7 @@ public class ExecutionSiteProxy
         catch (FileTransferException ex)
         {
             logger.log("Cannot upload file "+filepath+" to "+ msg.getParam("upload_to")+".", ex);
+            response.setParam("exception", ex);
             response.setParam("upload_complete", false);
         }
         try

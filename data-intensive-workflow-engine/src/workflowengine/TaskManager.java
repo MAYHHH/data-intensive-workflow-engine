@@ -4,6 +4,7 @@
  */
 package workflowengine;
 
+import java.io.File;
 import workflowengine.communication.FileTransferException;
 import java.io.IOException;
 import java.util.HashMap;
@@ -169,21 +170,22 @@ public class TaskManager
 
     public void updateTaskStatus(Message msg)
     {
+        char status = msg.getCharParam("status");
+//        System.out.println("Update task "+msg.getIntParam("tid")+" to "+status);
         Task.updateTaskStatus(
                 msg.getIntParam("tid"),
                 msg.getIntParam("start"),
                 msg.getIntParam("end"),
                 msg.getIntParam("exit_value"),
-                msg.getCharParam("status"));
-        char status = msg.getCharParam("status");
+                status);
         if (status == Task.STATUS_COMPLETED || status == Task.STATUS_FAIL)
         {
             if (isRescheduleNeeded())
             {
                 reschedule(msg.getIntParam("wfid"));
             }
-            dispatchTask();
         }
+        dispatchTask();
     }
 
     public boolean isRescheduleNeeded()
@@ -233,6 +235,21 @@ public class TaskManager
             logger.log("Cannot upload input files for " + w.getName() + ": " + ex.getMessage());
             return;
         }
+        
+        for(File f : new File(inputFileDir).listFiles())
+        {
+            WorkflowFile wff = null;
+            if (f.isDirectory())
+            {
+                wff = WorkflowFile.getFile(f.getName(), 1, WorkflowFile.TYPE_FILE);
+            }
+            else
+            {
+                wff = WorkflowFile.getFile(f.getName(), 1, WorkflowFile.TYPE_FILE);
+            }
+            insertFileToEsp(wff.getDbid(), nearestEsp);
+        }
+        
         List<WorkflowFile> files = w.getInputFiles();
         for (WorkflowFile f : files)
         {
@@ -353,6 +370,7 @@ public class TaskManager
                     }
                 }
             }).start();
+            
         }
     }
 
@@ -422,7 +440,8 @@ public class TaskManager
             Message res = comm.getResponseMessage(msg);
             if(!res.getBooleanParam("upload_complete"))
             {
-                complete = false;
+                complete = complete && false;
+                logger.log("",((Exception)res.getObjectParam("exception")));
             }
             else
             {

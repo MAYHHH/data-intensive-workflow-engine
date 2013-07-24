@@ -240,6 +240,7 @@ public class Workflow implements Serializable
                     String taskName = jobElement.getAttribute("name");
 //                    String taskNameSpace = jobElement.getAttribute("namespace");
                     Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", namespace);
+                    task.addInputFile(WorkflowFile.getFile(taskName, 1, WorkflowFile.TYPE_FILE));
                     StringBuilder cmdBuilder = new StringBuilder();
                     cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);
@@ -472,7 +473,7 @@ public class Workflow implements Serializable
     public static void main(String[] args) throws DBException, FileNotFoundException
     {
         Utils.disableDB();
-        Workflow wf = fromDAX("C:\\Documents and Settings\\udomo\\My Documents\\Downloads\\we\\workflows\\Montage_143.xml");
+        Workflow wf = fromDAX("/home/orachun/Desktop/dag.xml");
         
     }
 }
