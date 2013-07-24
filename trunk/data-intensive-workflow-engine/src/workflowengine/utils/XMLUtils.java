@@ -4,8 +4,8 @@
  */
 package workflowengine.utils;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.StringReader;
 import java.io.StringWriter;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -19,6 +19,8 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 /**
@@ -71,10 +73,10 @@ public class XMLUtils
     {
         try
         {
-            return DocumentBuilderFactory
+            return (Element)DocumentBuilderFactory
                     .newInstance()
                     .newDocumentBuilder()
-                    .parse(new ByteArrayInputStream(xmlStr.getBytes()))
+                    .parse(new InputSource( new StringReader( xmlStr ) ))
                     .getDocumentElement();
         }
         catch (ParserConfigurationException | SAXException | IOException e)
@@ -85,24 +87,72 @@ public class XMLUtils
     
     public static String argumentTagToCmd(Element jobElement)
     {
-        Node n = jobElement.getElementsByTagName("argument").item(0);
-        String nodeString = nodeToString(n);
-        nodeString = nodeString.replace("<"+n.getNodeName()+">", "");
-        nodeString = nodeString.replace("</"+n.getNodeName()+">", "");
-        nodeString = nodeString.trim();
-        String[] lines = nodeString.split("\n");
-        StringBuilder cmd = new StringBuilder();
-        for(int i=0;i<lines.length;i++)
+//        NodeList nl = jobElement.getChildNodes();
+//        for(int i=0;i<nl.getLength();i++)
+//        {
+//            System.out.println(nl.item(i).getTextContent());
+//        }
+//        System.exit(1);
+        
+        
+//        Node n = jobElement.getElementsByTagName("argument").item(0);
+        String taskName = jobElement.getAttribute("name");
+//        String nodeString = nodeToString(n);
+//        nodeString = nodeString.replace("<"+n.getNodeName()+">", "");
+//        nodeString = nodeString.replace("</"+n.getNodeName()+">", "");
+//        nodeString = nodeString.trim();
+//        String[] lines = nodeString.split("\n");
+        StringBuilder cmd = new StringBuilder(taskName).append(";");
+        
+        
+        
+        NodeList argList = jobElement.getElementsByTagName("argument").item(0).getChildNodes();
+        for(int i=0;i<argList.getLength();i++)
         {
-            lines[i] = lines[i].trim();
-            Element e = strToNode(lines[i]);
-            if(e != null)
+            Node c = argList.item(i);
+            String cStr;
+            if(c.getNodeName().equals("file"))
             {
-                lines[i] = e.getAttribute("name");
+                Element ec = (Element)c;
+                cStr = (ec.getAttribute("name")).trim();
+                if(!cStr.isEmpty())
+                {
+                    cmd.append(cStr).append(";");
+                }
             }
-            cmd.append(lines[i]).append(";");
+            else
+            {
+                cStr = (c.getTextContent().trim());
+                String[] cStrs = cStr.split("\\s+");
+                for(String cs : cStrs)
+                {
+                    cs = cs.trim();
+                    if(!cs.isEmpty())
+                    {
+                        cmd.append(cs).append(";");
+                    }
+                }
+            }
+            
+            
         }
+        
+//        for(int i=0;i<lines.length;i++)
+//        {
+//            lines[i] = lines[i].trim();
+//            Element e = strToNode(lines[i]);
+//            if(e != null)
+//            {
+//                lines[i] = e.getAttribute("name");
+//            }
+//            lines[i] = lines[i].replace("<file name=\"", "");
+//            lines[i] = lines[i].replace("\"/>", "");
+//            lines[i] = lines[i].trim();
+//            cmd.append(lines[i]).append(";");
+//            
+//        }
         cmd.replace(cmd.length()-1, cmd.length(), "");
+//        System.out.println(cmd.toString());
         return cmd.toString();
     }
 }

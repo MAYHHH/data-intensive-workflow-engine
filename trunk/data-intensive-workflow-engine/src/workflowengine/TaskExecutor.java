@@ -5,15 +5,14 @@
 package workflowengine;
 
 import workflowengine.communication.FileTransferException;
-import com.zehon.sftp.SFTPClient;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.Message;
 import workflowengine.utils.Logger;
-import workflowengine.utils.SFTPUtils;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
@@ -336,7 +335,17 @@ public class TaskExecutor
         String path = pb.environment().get("PATH") + ":" + currentWorkingDir+":"+currentWorkingDir+msg.getParam("task_namespace");
         pb.environment().put("PATH", path);
         currentTaskStart = Utils.time();
+        
+        StringBuilder cmdString = new StringBuilder();
+        List<String> cs = pb.command();
+        for(int i=0;i<cs.size();i++)
+        {
+            cmdString.append(cs.get(i)).append(" ");
+        }
+        
         logger.log("Starting execution of task " + currentTaskName + ".");
+        logger.log("Command:   "+cmdString.toString());
+        
         return pb.start();
     }
 
@@ -413,7 +422,6 @@ public class TaskExecutor
             logger.log("Execution of task " + currentTaskName + " is finished.");
 
             currentTaskEnd = Utils.time();
-
             if (isSuspensed)
             {
                 setIdle();
@@ -449,6 +457,7 @@ public class TaskExecutor
         catch (IOException | InterruptedException | FileTransferException ex)
         {
             currentTaskEnd = Utils.time();
+            setIdle();
             String errorMsg = "Exception while " + currentTaskName + " is executing: " + ex.getMessage();
             logger.log(errorMsg, ex);
             Message response = new Message(Message.TYPE_UPDATE_TASK_STATUS);
