@@ -37,7 +37,7 @@ public class TaskManager
 {
 
     public static final Logger logger = new Logger("task-manager.log");
-    private static final Scheduler sch = new RandomScheduler();
+    private static Scheduler sch = null;
     private static TaskManager tm = null;
     private HostAddress addr;
     private HostAddress nearestEsp;
@@ -79,9 +79,11 @@ public class TaskManager
             }
         }
     };
-
-    private TaskManager() throws IOException
+    
+    private TaskManager() throws IOException, ClassNotFoundException, IllegalAccessException, InstantiationException
     {
+        Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
+        sch = (Scheduler)c.newInstance();
         addr = new HostAddress(Utils.getPROP(), "task_manager_host", "task_manager_port");
         nearestEsp = new HostAddress(Utils.getPROP(), "nearest_esp_host", "nearest_esp_port");
         comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_MANAGER);
@@ -101,9 +103,9 @@ public class TaskManager
             logger.log("Task manager is started.");
             return tm;
         }
-        catch (IOException ex)
+        catch (IOException | ClassNotFoundException | IllegalAccessException | InstantiationException ex)
         {
-            logger.log("Cannot start task manager: " + ex.getLocalizedMessage());
+            logger.log("Cannot start task manager: ",ex );
             return null;
         }
     }
@@ -180,9 +182,14 @@ public class TaskManager
                 status);
         if (status == Task.STATUS_COMPLETED || status == Task.STATUS_FAIL)
         {
-            if (isRescheduleNeeded())
+            int wfid = msg.getIntParam("wfid");
+            if (Workflow.isFinished(wfid))
             {
-                reschedule(msg.getIntParam("wfid"));
+                Workflow.setFinishedTime(wfid, Utils.time());
+            }
+            else if (isRescheduleNeeded())
+            {
+                reschedule(wfid);
             }
         }
         dispatchTask();
@@ -286,7 +293,9 @@ public class TaskManager
         //Synchronized to shedule one workflow at a time
         synchronized (this)
         {
+            Workflow.setStartedTime(wf.getDbid(), Utils.time());
             schedule = sch.getSchedule(new SchedulerSettings(wf, getExecSite()));
+            Workflow.setScheduledTime(wf.getDbid(), Utils.time());
         }
         
         setScheduleForWorkflow(wf, schedule);

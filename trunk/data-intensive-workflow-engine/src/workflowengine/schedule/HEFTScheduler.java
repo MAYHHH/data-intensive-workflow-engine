@@ -61,6 +61,13 @@ public class HEFTScheduler implements Scheduler
         while (!sortedTasks.isEmpty())
         {
             Task t = sortedTasks.poll();
+            
+            if(!taskFinishTime.keySet().containsAll(settings.getWf().getParentTasks(t)))
+            {
+                sortedTasks.add(t);
+                continue;
+            }
+            
             Worker targetW = settings.getWorker(0);
             double parentFinTime = Double.NEGATIVE_INFINITY;
             

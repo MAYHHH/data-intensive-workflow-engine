@@ -43,8 +43,12 @@ import workflowengine.utils.XMLUtils;
  */
 public class Workflow implements Serializable
 {
+    public static final char STATUS_SUBMITTED = 'W';
+    public static final char STATUS_SCHEDULED = 'S';
+    public static final char STATUS_COMPLETED = 'C';
+    
     private int dbid;
-    private char status = 'W';
+    private char status = STATUS_SUBMITTED;
     private Task start;
     private Task end;
     private ArrayList<Task> tasks = new ArrayList<>();
@@ -57,6 +61,34 @@ public class Workflow implements Serializable
     {
         this.name = name;
         dbid = new DBRecord("workflow", "name", name, "status", status, "submitted", Utils.time()).insert();
+    }
+    
+    public static void setStartedTime(int wfid, long time)
+    {
+        DBRecord.update("UPDATE workflow SET started_at='"+time+"' WHERE wfid='"+wfid+"'");
+        setStatus(wfid, STATUS_SUBMITTED);
+    }
+    
+    public static void setScheduledTime(int wfid, long time)
+    {
+        DBRecord.update("UPDATE workflow SET scheduled_at='"+time+"' WHERE wfid='"+wfid+"'");
+        setStatus(wfid, STATUS_SCHEDULED);
+    }
+    public static void setFinishedTime(int wfid, long time)
+    {
+        DBRecord.update("UPDATE workflow SET finished_at='"+time+"' WHERE wfid='"+wfid+"'");
+        setStatus(wfid, STATUS_COMPLETED);
+    }
+    public static void setStatus(int wfid, char status)
+    {
+        DBRecord.update("UPDATE workflow SET status='"+status+"' WHERE wfid='"+wfid+"'");
+    }
+    public static boolean isFinished(int wfid)
+    {
+        return DBRecord.select("SELECT count(*) AS incompleted_tasks "
+                + "FROM workflow_task "
+                + "WHERE wfid='"+wfid+"' "
+                + "AND status<>'C'").get(0).getInt("incompleted_tasks") == 0;
     }
     
     public void prepareWorkingDirectory()
