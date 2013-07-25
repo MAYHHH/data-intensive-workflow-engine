@@ -4,6 +4,8 @@
  */
 package workflowengine;
 
+import workflowengine.utils.Utils;
+
 /**
  *
  * @author Orachun
@@ -11,7 +13,7 @@ package workflowengine;
 public class WorkflowEngine
 {
 
-    public static void main(String[] args)
+    public static void main(String[] args) throws ClassNotFoundException
     {
         if (args.length == 0)
         {
@@ -41,7 +43,7 @@ public class WorkflowEngine
                 }
                 else
                 {
-                    System.err.println("Cannot start task executor.");
+                    System.err.println("Cannot start task manager.");
                 }
                 break;
             case "ExecutionSiteProxy":

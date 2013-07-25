@@ -42,7 +42,7 @@ public class TaskExecutor
     private String uuid;
     private HostAddress espAddr;
     private int port;
-    private double cpu = -1;
+    private double cpu = 1;
     private Communicable comm = new Communicable("Worker")
     {
         @Override
@@ -130,7 +130,7 @@ public class TaskExecutor
 
 //        File defaultStorage = new File(Utils.getProp("working_dir"));
 //        msg.setParam("free_space", defaultStorage.getFreeSpace()); //in bytes
-        msg.setParam("free_space", -1); //in bytes
+        msg.setParam("free_space", 1); //in bytes
 
         msg.setParam("current_tid", currentTaskDbid);
         msg.setParam("free_memory", getFreeMemory());
@@ -155,7 +155,7 @@ public class TaskExecutor
 
     public double getFreeMemory()
     {
-        return -1;
+        return 1;
 //        try
 //        {
 //            Process p = Runtime.getRuntime().exec(new String[]
@@ -172,7 +172,7 @@ public class TaskExecutor
 
     public double getCPU()
     {
-        return -1;
+        return 1;
 //        if(cpu == -1)
 //        {
 //            try
