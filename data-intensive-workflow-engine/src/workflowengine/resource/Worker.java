@@ -44,10 +44,10 @@ public class Worker
 
     public static Worker getWorkerFromDB(String uuid)
     {
-        if(!Utils.isDBEnabled())
-        {
-            throw new RuntimeException("Database is disabled.");
-        }
+//        if(!Utils.isDBEnabled())
+//        {
+//            throw new RuntimeException("Database is disabled.");
+//        }
         try
         {
             DBRecord r = DBRecord.select("worker",
@@ -66,7 +66,7 @@ public class Worker
                     uuid);
             return w;
         }
-        catch (IndexOutOfBoundsException ex)
+        catch (IndexOutOfBoundsException | NullPointerException ex)
         {
             return null;
         }
@@ -74,6 +74,10 @@ public class Worker
 
     public void insert()
     {
+        if(!Utils.isDBEnabled())
+        {
+            return;
+        }
         int esid = new DBRecord("exec_site", 
                 "hostname", espAddr.getHost(),
                 "port", espAddr.getPort()).insertIfNotExist();
@@ -96,12 +100,12 @@ public class Worker
         
     }
 
-    public static void updateWorkerStatus(HostAddress espAddr, HostAddress workerAddr, int currentTid, double freeMem, double freeStorage, double cpu, String uuid)
+    public static Worker updateWorkerStatus(HostAddress espAddr, HostAddress workerAddr, int currentTid, double freeMem, double freeStorage, double cpu, String uuid)
     {
-        if(!Utils.isDBEnabled())
-        {
-            throw new RuntimeException("Database is disabled.");
-        }
+//        if(!Utils.isDBEnabled())
+//        {
+//            throw new RuntimeException("Database is disabled.");
+//        }
         Worker w = getWorkerFromDB(uuid);
         if (w == null)
         {
@@ -118,6 +122,7 @@ public class Worker
                     "cpu", cpu).update(new DBRecord("worker",
                     "uuid", uuid));
         }
+        return w;
 
     }
 

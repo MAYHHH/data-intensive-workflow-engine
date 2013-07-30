@@ -16,10 +16,21 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.apache.commons.io.filefilter.WildcardFileFilter;
+import org.apache.commons.vfs.FileChangeEvent;
+import org.apache.commons.vfs.FileListener;
+import org.apache.commons.vfs.FileObject;
+import org.apache.commons.vfs.FileSystemException;
+import org.apache.commons.vfs.FileSystemManager;
+import org.apache.commons.vfs.VFS;
+import org.apache.commons.vfs.impl.DefaultFileMonitor;
 
 /**
  *
@@ -28,6 +39,7 @@ import java.util.UUID;
 public class Utils
 {
 
+    public static final double BYTE = 1 / 1024 / 1024;
     public static final double KB = 1 / 1024;
     public static final double MB = 1;
     public static final double GB = 1024;
@@ -37,10 +49,6 @@ public class Utils
     private static boolean isPropInited = false;
     private static final int BUFFER_LEN = 1024*1024; //length of buffer in bytes
 
-    public static void main(String[] args)
-    {
-        getfileListInDir("/home/we/execution-site-proxy/we-file-storage/wf_1/rawdir/");
-    }
 
     public static Properties getPROP()
     {
@@ -58,7 +66,8 @@ public class Utils
     }
     public static boolean isDBEnabled()
     {
-        return !PROP.getProperty("db_disabled").equals("true");
+        String disabled = PROP.getProperty("db_disabled");
+        return disabled == null ? true : !disabled.equals("true");
     }
     
     public static void initProp()
@@ -77,7 +86,7 @@ public class Utils
             catch (IOException ex)
             {
                 System.err.println("Cannot read the configuration file " + CONFIG_FILE + ".");
-                System.exit(2);
+                throw new RuntimeException("Cannot read the configuration file " + CONFIG_FILE + ".");
             }
         }
     }
@@ -108,6 +117,22 @@ public class Utils
     public static String uuid()
     {
         return UUID.randomUUID().toString();
+    }
+    
+    /**
+     * Return a UUID string which ensure that it is not in the given
+     * collection.
+     * @param excludes
+     * @return 
+     */
+    public static String uuid(Collection<String> excludes)
+    {
+        String uuid = uuid();
+        while(excludes.contains(uuid))
+        {
+            uuid = uuid();
+        }
+        return uuid;
     }
 
     public static String execAndWait(String[] cmds, boolean getOutput)
@@ -291,5 +316,93 @@ public class Utils
         return fileList.toArray(new String[]{});
     }
     
+    public static ProcessBuilder createProcessBuilder(String[] cmds, 
+            String workingDir, String stdoutFile, String stderrFile, 
+            String additionalPath)
+    {
+        ProcessBuilder pb = new ProcessBuilder(cmds).directory(new File(
+                workingDir));
+        if(stderrFile != null && !stderrFile.isEmpty())
+        {
+            pb.redirectError(new File(stderrFile));
+        }
+        if(stdoutFile != null && !stdoutFile.isEmpty())
+        {
+            pb.redirectOutput(new File(stdoutFile));
+        }
+        String path = pb.environment().get("PATH") 
+                + ":" + Utils.getProp("additional_path");
+        if(additionalPath != null && !additionalPath.isEmpty())
+        {
+            path += ":" + additionalPath;
+        }
+        path += ":" + workingDir;
+        pb.environment().put("PATH", path);
+        return pb;
+    }
+    public static ProcessBuilder createProcessBuilder(String[] cmds)
+    {
+        return createProcessBuilder(cmds, Utils.getProp("home_dir"), null, null, null);
+    }
     
+    /**
+     * Rename file. wildcard is enabled in file path
+     * @param filePath
+     * @param newFilePath 
+     */
+    public static void renameFile(String filePath, String newFilePath)
+    {
+        File f = new File(filePath);
+        FileFilter ff = new WildcardFileFilter(f.getName());
+        File[] files = f.getParentFile().listFiles(ff);
+        if(files.length == 1)
+        {
+            files[0].renameTo(new File(newFilePath));
+        }
+    }
+    
+    /**
+     * Get file list from wildcard
+     * @param filePath
+     * @return 
+     */
+    public static File[] fileFromWildcard(String filePath)
+    {
+        File f = new File(filePath);
+        FileFilter ff = new WildcardFileFilter(f.getName());
+        return f.getParentFile().listFiles(ff);
+    }
+   
+    /**
+     * Wait until the file is closed.
+     */
+    public static boolean waitFile(File f)
+    {
+        long lastModified = f.lastModified();
+        while(true)
+        {
+            try
+            {
+                Thread.sleep(2000);
+            }
+            catch (InterruptedException ex)
+            {
+                return false;
+            }
+            if(lastModified == f.lastModified())
+            {
+                break;
+            }
+            lastModified = f.lastModified();
+        }
+        
+        return true;
+    }
+    
+    public static void main(String[] args) throws FileSystemException, InterruptedException
+    {
+        System.out.println("waiting..");
+        waitFile(new File("/home/orachun/Desktop/sleep.out"));
+        System.out.println("done.");
+    }
 }

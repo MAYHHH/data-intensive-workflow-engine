@@ -47,22 +47,43 @@ public class Workflow implements Serializable
     public static final char STATUS_SCHEDULED = 'S';
     public static final char STATUS_COMPLETED = 'C';
     
+    public static final double AVG_WORKLOAD = 15000;
+    public static final double AVG_FILE_SIZE = 150 * Utils.MB;
+    
     private int dbid;
     private char status = STATUS_SUBMITTED;
-    private Task start;
-    private Task end;
+//    private Task start;
+//    private Task end;
+    private List<Task> start;
+    private List<Task> end;
     private ArrayList<Task> tasks = new ArrayList<>();
     private DirectedSparseGraph<Task, String> graph = new DirectedSparseGraph<>();
     private String name = "";
     private HashSet<WorkflowFile> inputFiles = new HashSet<>();
     private HashSet<WorkflowFile> outputFiles = new HashSet<>();
+    private boolean insertToDB;
 
     public Workflow(String name) throws DBException
     {
-        this.name = name;
-        dbid = new DBRecord("workflow", "name", name, "status", status, "submitted", Utils.time()).insert();
+        this(name, true);
     }
-    
+    public Workflow(String name, boolean insertToDB)
+    {
+        this.name = name;
+        this.insertToDB = insertToDB;
+        if(insertToDB)
+        {
+            dbid = new DBRecord("workflow", "name", name, "status", status, "submitted", Utils.time()).insert();
+        }
+    }
+    public int getTaskIndex(Task t)
+    {
+        return tasks.indexOf(t);
+    }
+    public Task getTask(int index)
+    {
+        return tasks.get(index);
+    }
     public static void setStartedTime(int wfid, long time)
     {
         DBRecord.update("UPDATE workflow SET started_at='"+time+"' WHERE wfid='"+wfid+"'");
@@ -145,6 +166,12 @@ public class Workflow implements Serializable
         return name;
     }
 
+    public void addTask(Task t)
+    {
+        tasks.add(t);
+        graph.addVertex(t);
+    }
+    
     public void addEdge(Task from, Task to) throws DBException
     {
         if (!tasks.contains(from))
@@ -157,8 +184,12 @@ public class Workflow implements Serializable
         }
         graph.addEdge(from.getEdgeName(to), from, to, EdgeType.DIRECTED);
         
-        new DBRecord("workflow_task_depen", "wfid", dbid, "parent", from.getDbid(), "child", to.getDbid()).insert();
+        if(insertToDB)
+        {
+            new DBRecord("workflow_task_depen", "wfid", dbid, "parent", from.getDbid(), "child", to.getDbid()).insertIfNotExist();
+        }
     }
+    
 
     public void generateFileSet()
     {
@@ -174,52 +205,53 @@ public class Workflow implements Serializable
         inputFiles = newInputFiles;
     }
     
-    public void addStartAndEndTask() throws DBException
+    public void defineStartAndEndTasks() throws DBException
     {
         //Add START and END task if neccessary
-        LinkedList<Task> startTasks = new LinkedList<>();
-        LinkedList<Task> endTasks = new LinkedList<>();
+        start = new LinkedList<>();
+        end = new LinkedList<>();
         for (Task t : tasks)
         {
             if (graph.getInEdges(t).isEmpty())
             {
-                startTasks.add(t);
+                start.add(t);
             }
             if (graph.getOutEdges(t).isEmpty())
             {
-                endTasks.add(t);
+                end.add(t);
             }
         }
-        if (startTasks.size() == 1)
-        {
-            start = startTasks.get(0);
-        }
-        else
-        {
-            start = Task.getWorkflowTask("START", 0, this, "./dummy;0", "Dummy");
-            for (Task t : startTasks)
-            {
-                addEdge(start, t);
-            }
-        }
-        if (endTasks.size() == 1)
-        {
-            end = endTasks.get(0);
-        }
-        else
-        {
-            end = Task.getWorkflowTask("END", 0, this, "./dummy;0", "Dummy");
-            for (Task t : endTasks)
-            {
-                addEdge(t, end);
-            }
-        }
-        
+//        if (start.size() == 1)
+//        {
+//            start = start.get(0);
+//        }
+//        else
+//        {
+//            start = Task.getWorkflowTask("START", 0, this, "./dummy;0", "Dummy", insertToDB);
+//            for (Task t : start)
+//            {
+//                addEdge(start, t);
+//            }
+//        }
+//        if (end.size() == 1)
+//        {
+//            end = end.get(0);
+//        }
+//        else
+//        {
+//            end = Task.getWorkflowTask("END", 0, this, "./dummy;0", "Dummy", insertToDB);
+//            for (Task t : end)
+//            {
+//                addEdge(t, end);
+//            }
+//        }
+//        
     }
 
-    public Task getStartTask()
+    public List<Task> getStartTasks()
     {
-        return start;
+//        return start;
+        return new ArrayList<>(start);
     }
 
     public List<Task> getTaskList()
@@ -227,9 +259,10 @@ public class Workflow implements Serializable
         return new ArrayList<>(tasks);
     }
     
-    public Task getEndTask()
+    public List<Task> getEndTasks()
     {
-        return end;
+//        return end;
+        return new ArrayList<>(end);
     }
 
     public Collection<Task> getChildTasks(Task t)
@@ -243,8 +276,12 @@ public class Workflow implements Serializable
     }
 
     
-    
     public static Workflow fromDAX(String filename) throws DBException
+    {
+        return fromDAX(filename, false);
+    }
+    
+    public static Workflow fromDAX(String filename, boolean forSim) throws DBException
     {
         File f = new File(filename);
         Workflow wf = new Workflow(f.getName());
@@ -267,12 +304,12 @@ public class Workflow implements Serializable
                     String idString = jobElement.getAttribute("id");
                     int id = Integer.parseInt(idString.substring(2));
 //                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
-                    double runtime = 1;
+                    double runtime = AVG_WORKLOAD;
 
                     String taskName = jobElement.getAttribute("name");
 //                    String taskNameSpace = jobElement.getAttribute("namespace");
                     Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", namespace);
-                    task.addInputFile(WorkflowFile.getFile(taskName, 1, WorkflowFile.TYPE_FILE));
+                    task.addInputFile(WorkflowFile.getFile(taskName, AVG_FILE_SIZE, WorkflowFile.TYPE_FILE));
                     StringBuilder cmdBuilder = new StringBuilder();
                     cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);
@@ -317,6 +354,7 @@ public class Workflow implements Serializable
                     {
                         task.setCmd(cmd);
                     }
+                    wf.addTask(task);
                 }
             }
 
@@ -351,13 +389,19 @@ public class Workflow implements Serializable
             e.printStackTrace();
             throw new RuntimeException(e.getMessage());
         }
-        wf.addStartAndEndTask();
+        wf.defineStartAndEndTasks();
         wf.generateFileSet();
-        wf.prepareWorkingDirectory();
-//        wf.createDummyInputFiles();
-        wf.save(Utils.getProp("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
+        
+        if(!forSim)
+        {
+            wf.prepareWorkingDirectory();
+    //        wf.createDummyInputFiles();
+            wf.save(Utils.getProp("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
+        }
         return wf;
     }
+    
+    
     
     public Iterable<Task> getTaskIterator()
     {
@@ -499,6 +543,26 @@ public class Workflow implements Serializable
         }
         pw.println("</adag>");
         pw.close();
+    }
+    
+    /**
+     * Return task queue ordered by the task dependency that the parent
+     * task will come before the child task
+     * @return 
+     */
+    public LinkedList<Task> getTaskQueue()
+    {
+        LinkedList<Task> taskQueue = new LinkedList<>();
+        LinkedList<Task> q = new LinkedList<>();
+        q.addAll(this.getEndTasks());
+        while(!q.isEmpty())
+        {
+            Task t = q.poll();
+            taskQueue.remove(t);
+            taskQueue.push(t);
+            q.addAll(this.getParentTasks(t));
+        }
+        return taskQueue;
     }
     
     

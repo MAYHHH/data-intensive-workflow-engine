@@ -4,118 +4,194 @@
  */
 package workflowengine;
 
+import java.io.File;
 import workflowengine.communication.FileTransferException;
 import java.io.IOException;
 import workflowengine.communication.Communicable;
 import workflowengine.communication.HostAddress;
-import workflowengine.communication.Message;
+import workflowengine.communication.message.Message;
+import workflowengine.resource.Worker;
+import workflowengine.utils.DBRecord;
 import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
+import workflowengine.workflow.Task;
+import workflowengine.workflow.Workflow;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
  * @author udomo
  */
-public class ExecutionSiteProxy
+public class ExecutionSiteProxy extends Service
 {
 
     private static workflowengine.utils.Logger logger = new workflowengine.utils.Logger("execution-site-proxy.log");
     private HostAddress managerAddr;
-    private HostAddress addr;
+    private int esid;
     private static ExecutionSiteProxy esp = null;
     private SynchronizedHashMap<String, HostAddress> workerMap = new SynchronizedHashMap<>(); //<uuid, host address>
     private SynchronizedHashMap<String, Message> workerHeartbeatMsg = new SynchronizedHashMap<>(); //<uuid, host address>
-    
-    private Communicable comm = new Communicable("Execution Site Proxy")
-    {
-        @Override
-        public void handleMessage(Message msg)
-        {
-//            logger.log("Received msg from "+msg.getParam(Message.PARAM_FROM));
-//            logger.log(msg.toString());
-            switch (msg.getType())
-            {
-                case Message.TYPE_UPDATE_NODE_STATUS:
-                    if(msg.getBooleanParam(Message.PARAM_NEED_RESPONSE))
-                    {
-                        forwardMsgToManager(msg);
-                    }
-                    else
-                    {
-                        String uuid = msg.getParam(Message.PARAM_WORKER_UUID);
-                        workerHeartbeatMsg.put(uuid, msg);
-                    }
-                    break;
-                    
-                //From manager to executor
-                case Message.TYPE_RESPONSE_TO_WORKER:
-                case Message.TYPE_DISPATCH_TASK:
-                case Message.TYPE_GET_NODE_STATUS:
-                case Message.TYPE_SUSPEND_TASK:
-                    forwardMsgToWorker(msg);
-                    break;
 
-                //From executor to manager
-                case Message.TYPE_UPDATE_TASK_STATUS:
-                case Message.TYPE_SUBMIT_WORKFLOW:
-                case Message.TYPE_SUSPEND_TASK_COMPLETE:
-                case Message.TYPE_REGISTER_FILE:
-                case Message.TYPE_RESPONSE_TO_MANAGER:
-                    forwardMsgToManager(msg);
-                    break;
-                    
-                //From manager to ESP
-                case Message.TYPE_FILE_UPLOAD_REQUEST:
-                    uploadFile(msg);
-                    break;
+    @Override
+    protected void prepareComm()
+    {
+
+
+        comm = new Communicable("Execution Site Proxy")
+        {
+            @Override
+            public void handleMessage(Message msg)
+            {
+                switch (msg.getType()) {
+                    case Message.TYPE_UPDATE_NODE_STATUS:
+                        updateNodeStatus(msg);
+
+                    //From manager to executor
+                    case Message.TYPE_RESPONSE_TO_WORKER:
+                    case Message.TYPE_DISPATCH_TASK:
+                    case Message.TYPE_GET_NODE_STATUS:
+                    case Message.TYPE_SUSPEND_TASK:
+                        forwardMsgToWorker(msg);
+                        break;
+
+                    //From executor to manager
+//                case Message.TYPE_SUBMIT_WORKFLOW:
+                    case Message.TYPE_SUSPEND_TASK_COMPLETE:
+                    case Message.TYPE_RESPONSE_TO_MANAGER:
+                        forwardMsgToManager(msg);
+                        break;
+
+                    //From manager to ESP
+                    case Message.TYPE_FILE_UPLOAD_REQUEST:
+                        uploadFile(msg);
+                        break;
+                    case Message.TYPE_CHECKPOINT_FILE_UPLOAD_REQUEST:
+                        uploadCheckPointFile(msg);
+                        break;
+
+                    case Message.TYPE_REGISTER_CHECKPOINT_FILE:
+                        registerCheckpointFiles(msg);
+                        break;
+
+                    case Message.TYPE_REGISTER_FILE:
+                        registerFile(msg);
+                        break;
+                        
+                        
+                    case Message.TYPE_UPDATE_TASK_STATUS:
+                        updateTaskStatus(msg);
+                        break;
+                        
+                    default:
+                        throw new RuntimeException("The message type "+msg.getType()+" is not "
+                                + "handled.");
+                }
             }
+        };
+    }
+
+    private void updateTaskStatus(Message msg)
+    {
+        char status = msg.getCharParam("status");
+//        System.out.println("Update task "+msg.getIntParam("tid")+" to "+status);
+        Task.updateTaskStatus(
+                msg.getInt("tid"),
+                msg.getInt("start"),
+                msg.getInt("end"),
+                msg.getInt("exit_value"),
+                status);
+        if (status == Task.STATUS_COMPLETED || status == Task.STATUS_FAIL) {
+            int wfid = msg.getInt("wfid");
+            if (Workflow.isFinished(wfid)) {
+                Workflow.setFinishedTime(wfid, Utils.time());
+            }
+//            else if (isRescheduleNeeded()) {
+//                logger.log("Rescheduling ...");
+//                reschedule(wfid);
+//                logger.log("Done.");
+//            }
+            requestDispatchTask(msg);
         }
-    };
+    }
+    
+    private void requestDispatchTask(Message taskStatusMsg)
+    {
+        Message msg = new Message(Message.TYPE_DISPATCH_TASK_REQUEST);
+        msg.set("wfid", taskStatusMsg.get("wfid"));
+        try 
+        {
+            comm.sendMessage(managerAddr, msg);
+        }
+        catch (IOException ex) 
+        {
+            logger.log("Cannot send dispatch task request message.", ex);
+        }
+    }
+    
+    private void uploadCheckPointFile(Message msg)
+    {
+        
+    }
     
     private void forwardMsgToWorker(Message msg)
     {
-        HostAddress workerAddr = workerMap.get(msg.getParam(Message.PARAM_WORKER_UUID));
-       
-        try
+        HostAddress workerAddr = workerMap.get(msg.get(Message.PARAM_WORKER_UUID));
+
+        try 
         {
             comm.sendMessage(workerAddr, msg);
         }
-        catch (IOException ex)
-        {
+        catch (IOException ex) {
             logger.log("Cannot sent message to " + workerAddr + ": " + ex.getMessage(), ex);
         }
+    }
+
+    private HostAddress recordWorker(Message msgFromWorker)
+    {
+        String uuid = msgFromWorker.get(Message.PARAM_WORKER_UUID);
+        HostAddress workerAddr = workerMap.get(uuid);
+        if (workerAddr == null) {
+            workerAddr = new HostAddress(
+                    msgFromWorker.get(Message.PARAM_FROM), 
+                    msgFromWorker.getInt(Message.PARAM_WORKER_PORT)
+                    );
+            workerMap.put(uuid, workerAddr);
+        }
+        return workerAddr;
     }
     
     private void prepareMsgToManager(Message msg)
     {
-        String uuid = msg.getParam(Message.PARAM_WORKER_UUID);
-        HostAddress workerAddr = workerMap.get(uuid);
-        if (workerAddr == null)
-        {
-            workerAddr = new HostAddress(msg.getParam(Message.PARAM_FROM), msg.getIntParam(Message.PARAM_WORKER_PORT));
-            workerMap.put(uuid, workerAddr);
-        }
-        msg.setParam(Message.PARAM_WORKER_ADDRESS, workerAddr);
-        msg.setParam(Message.PARAM_ESP_ADDRESS, addr);
+//        String uuid = msg.get(Message.PARAM_WORKER_UUID);
+//        HostAddress workerAddr = workerMap.get(uuid);
+//        if (workerAddr == null) {
+//            workerAddr = new HostAddress(msg.get(Message.PARAM_FROM), msg.getInt(Message.PARAM_WORKER_PORT));
+//            workerMap.put(uuid, workerAddr);
+//        }
+        HostAddress workerAddr = recordWorker(msg);
+        msg.set(Message.PARAM_WORKER_ADDRESS, workerAddr);
+        msg.set(Message.PARAM_ESP_ADDRESS, addr);
     }
-    
+
     private void forwardMsgToManager(Message msg)
     {
         prepareMsgToManager(msg);
-        try
-        {
+        try {
             comm.sendMessage(managerAddr, msg);
         }
-        catch (IOException ex)
-        {
+        catch (IOException ex) {
             logger.log("Cannot sent message to " + managerAddr + ": " + ex.getMessage(), ex);
         }
     }
 
     private ExecutionSiteProxy() throws IOException
     {
+        prepareComm();
         addr = new HostAddress(Utils.getPROP(), "exec_site_proxy_host", "exec_site_proxy_port");
         managerAddr = new HostAddress(Utils.getPROP(), "task_manager_host", "task_manager_port");
+        esid = new DBRecord("exec_site",
+                "hostname", addr.getHost(),
+                "port", addr.getPort()).insertIfNotExist();
         comm.setTemplateMsgParam(Message.PARAM_ESP_ADDRESS, addr);
         comm.setLocalPort(addr.getPort());
         comm.startServer();
@@ -123,25 +199,20 @@ public class ExecutionSiteProxy
 
     public static ExecutionSiteProxy startService()
     {
-        try
-        {
-            if (esp == null)
-            {
+        try {
+            if (esp == null) {
                 esp = new ExecutionSiteProxy();
-                new Thread(new Runnable() {
-
+                new Thread(new Runnable()
+                {
                     @Override
                     public void run()
                     {
-                        while(true)
-                        {
+                        while (true) {
                             esp.sendHeartbeat();
-                            try
-                            {
+                            try {
                                 Thread.sleep(10000);
                             }
-                            catch (InterruptedException ex)
-                            {
+                            catch (InterruptedException ex) {
                                 logger.log("Interrupted while sleeping.", ex);
                             }
                         }
@@ -151,73 +222,169 @@ public class ExecutionSiteProxy
             logger.log("Execution site proxy is started.");
             return esp;
         }
-        catch (IOException ex)
-        {
+        catch (IOException ex) {
             logger.log("Cannot start execution site proxy: " + ex.getLocalizedMessage());
             return null;
         }
     }
-    
+
     public void sendHeartbeat()
     {
-        try
-        {
-            Message msg = new Message(Message.TYPE_UPDATE_NODE_STATUS);
-            Message[] msgs = workerHeartbeatMsg.values().toArray(new Message[]{});
-            for(Message m : msgs)
-            {
-                prepareMsgToManager(m);
-            }
-            msg.setParam(Message.PARAM_WORKER_MSGS, msgs);
-            comm.sendMessage(managerAddr, msg);
-            workerHeartbeatMsg.clear();
-        }
-        catch (IOException ex)
-        {
-            logger.log("Cannot send heartbeat messages.");
-        }
-        
+//        try {
+//            Message msg = new Message(Message.TYPE_UPDATE_NODE_STATUS);
+//            Message[] msgs = workerHeartbeatMsg.values().toArray(new Message[]{});
+//            for (Message m : msgs) {
+//                prepareMsgToManager(m);
+//            }
+//            msg.set(Message.PARAM_WORKER_MSGS, msgs);
+//            comm.sendMessage(managerAddr, msg);
+//            workerHeartbeatMsg.clear();
+//        }
+//        catch (IOException ex) {
+//            logger.log("Cannot send heartbeat messages.");
+//        }
+
     }
 
     public void uploadFile(Message msg)
     {
         Message response = new Message(Message.TYPE_RESPONSE_TO_MANAGER);
-        String filename = msg.getParam("filename");
-//        String remoteDir = msg.getParam("dir");
-        String dir = msg.getParam("dir");
-        String filepath = dir+filename;
-        try
-        {
-            String uploadTo = msg.getParam("upload_to");
-//            SFTPClient client = SFTPUtils.getSFTP(uploadTo);
-            logger.log("Sending file "+filepath+" to "+ uploadTo);
-            if(Utils.isDir(filepath))
-            {
-//                client.sendFolder(filepath, filepath, null);
+        String filename = msg.get("filename");
+        String dir = msg.get("dir");
+        String filepath = dir + filename;
+        String uploadTo = msg.get("upload_to");
+        try {
+            logger.log("Sending file " + filepath + " to " + uploadTo);
+            if (Utils.isDir(filepath)) {
                 comm.sendDir(uploadTo, addr.getPort(), dir, filepath);
             }
-            else
-            {
-//                client.sendFile(filepath, remoteDir);
+            else {
                 comm.sendFile(uploadTo, addr.getPort(), filepath, filepath);
             }
             logger.log("Done.");
-            response.setParam("upload_complete", true);
-            response.setParam("status", "complete");
+            response.set("upload_complete", true);
+            response.set("status", "complete");
+            insertFile(msg.getInt("fid"), uploadTo);
         }
-        catch (FileTransferException ex)
-        {
-            logger.log("Cannot upload file "+filepath+" to "+ msg.getParam("upload_to")+".", ex);
-            response.setParam("exception", ex);
-            response.setParam("upload_complete", false);
+        catch (FileTransferException ex) {
+            logger.log("Cannot upload file " + filepath + " to " + uploadTo + ".", ex);
+            response.set("exception", ex);
+            response.set("upload_complete", false);
         }
-        try
-        {
+        try {
             comm.sendResponseMsg(managerAddr, msg, response);
         }
-        catch (IOException ex)
-        {
+        catch (IOException ex) {
             logger.log("Cannot send message: " + ex.getMessage());
         }
+        
     }
+
+    public void registerCheckpointFiles(Message msg)
+    {
+        String filepath = msg.get("checkpoint_file_path");
+        File f = new File(filepath);
+        int tid = msg.getInt("tid");
+        WorkflowFile wff = WorkflowFile.getFile(f.getName(), f.length()*Utils.BYTE, WorkflowFile.TYPE_CHECKPOINT_FILE);
+        Task t = Task.getWorkflowTaskFromDB(tid);
+        t.addInputFile(wff);
+        
+//        
+//        int wkid = msg.getInt("wkid");
+//        int time = msg.getInt("time");
+//
+//        new DBRecord("exec_site_checkpoint")
+//                .set("tid", tid)
+//                .set("path", filepath)
+//                .set("checkpointed_at", time)
+//                .set("esid", esid)
+//                .insert();
+        try {
+            comm.sendResponseMsg(msg.get(Message.PARAM_FROM), msg.getInt(Message.PARAM_RESPONSE_PORT), msg, new Message(Message.TYPE_NONE));
+        }
+        catch (IOException ex) {
+            logger.log("Cannot send response message.", ex);
+        }
+    }
+
+    public void updateNodeStatus(Message msg)
+    {
+        HostAddress workerAddr = recordWorker(msg);
+        Worker.updateWorkerStatus(
+                this.addr,
+                workerAddr,
+                msg.getInt("current_tid"),
+                msg.getDoubleParam("free_memory"),
+                msg.getDoubleParam("free_space"),
+                msg.getDoubleParam("cpu"),
+                msg.get(Message.PARAM_WORKER_UUID));
+        if (msg.getBoolean(Message.PARAM_NEED_RESPONSE)) {
+            try {
+                logger.log("Sending response message to worker " + workerAddr);
+                Message response = new Message(Message.TYPE_RESPONSE_TO_WORKER);
+                response.setParamFromMsg(msg, Message.PARAM_WORKER_UUID);
+                comm.sendResponseMsg(workerAddr, msg, response);
+                logger.log("Done.");
+            }
+            catch (IOException ex) {
+                logger.log("Cannot send response message.", ex);
+            }
+        }
+    }
+
+    public void registerFile(Message msg)
+    {
+        if (msg.getBoolean("is_workflow_file")) {
+            WorkflowFile[] wfiles = (WorkflowFile[]) msg.getObject("files");
+            for (WorkflowFile f : wfiles) {
+                insertFile(f.getDbid());
+            }
+        }
+        else {
+            String file = msg.get("name");
+            double size = msg.getDoubleParam("size");
+            char type = msg.getCharParam("type");
+            WorkflowFile f = WorkflowFile.getFile(file, size, type);
+            insertFile(f.getDbid());
+        }
+    }
+
+    private void insertFile(int fid)
+    {
+        new DBRecord("exec_site_file",
+                "esid", esid,
+                "fid", fid).insertIfNotExist();
+    }
+    private void insertFile(int fid, String espHost)
+    {
+        int espID = DBRecord.select("SELECT esid FROM exec_site "
+                + "WHERE hostname='"+espHost+"'").get(0).getInt("esid");
+        new DBRecord("exec_site_file",
+                "esid", espID,
+                "fid", fid).insertIfNotExist();
+    }
+//    
+//    private void broadcastToWorker(Message msg)
+//    {
+//        Message attachedMsg = (Message)msg.getObject(Message.PARAM_ATTACHED_MSG);
+//        boolean needResponse = msg.getBoolean(Message.PARAM_NEED_RESPONSE);
+//        List<DBRecord> rec = DBRecord.select("SELECT hostname, port FROM worker WHERE esid='"+esid+"'");
+//        for(DBRecord r : rec)
+//        {
+//            try{
+//            if(needResponse)
+//            {
+//                comm.sendForResponseAsync(r.get("hostname"), r.getInt("port"), this.addr.getPort(), attachedMsg);
+//            }
+//            else
+//            {
+//                comm.sendMessage(r.get("hostname"), r.getInt("port"), msg);
+//            }
+//            }
+//            catch(IOException ex)
+//            {
+//                logger.log("Cannot send message to "+r.get("hostname"), ex);
+//            }
+//        }
+//    }
 }

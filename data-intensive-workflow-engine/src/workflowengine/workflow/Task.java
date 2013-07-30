@@ -13,7 +13,7 @@ import workflowengine.utils.Utils;
  *
  * @author Orachun
  */
-public class Task implements Serializable
+public class Task implements Serializable, Comparable<Task>
 {
     public static final char STATUS_WAITING = 'W';
     public static final char STATUS_DISPATCHED = 'D';
@@ -59,7 +59,23 @@ public class Task implements Serializable
         this.namespace = namespace;
     }
     
+    /**
+     * Return a dummy task which cannot do anything. This task will not
+     * be saved into the database.
+     * @param name
+     * @param wf
+     * @return 
+     */
+    public static Task getDummyTask(String name, Workflow wf)
+    {
+        Task t = new Task(name, 0, wf, "", "");
+        return t;
+    }
     public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd, String namespace)
+    {
+        return getWorkflowTask(name, operations, wf, cmd, namespace, true);
+    }
+    public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd, String namespace, boolean insert)
     {
         Task t = null;
         if(Utils.isDBEnabled())
@@ -69,7 +85,10 @@ public class Task implements Serializable
         if(t == null)
         {
             t = new Task(name, operations, wf, cmd, namespace);
-            t.insert();
+            if(insert)
+            {
+                t.insert();
+            }
         }
         return t;
     }
@@ -127,7 +146,7 @@ public class Task implements Serializable
             t.status = r.get("status").charAt(0);
             return t;
         }
-        catch (ArrayIndexOutOfBoundsException ex)
+        catch (IndexOutOfBoundsException ex)
         {
             return null;
         }
@@ -151,6 +170,12 @@ public class Task implements Serializable
     public String getCmd()
     {
         return cmd;
+    }
+    public void setCheckpointFile(WorkflowFile f)
+    {
+        String[] cmds = cmd.split(";");
+        cmd = cmd.replace(cmds[0], f.getName());
+        setCmd(cmd);
     }
     
     public void insert()
@@ -367,4 +392,22 @@ public class Task implements Serializable
     {
         return "wf_"+wfdbid+"/";
     }
+
+    @Override
+    public int compareTo(Task o)
+    {
+        int h1 = hashCode();
+        int h2 = o.hashCode();
+        if(h1 < h2)
+        {
+            return -1;
+        }
+        if(h1 == h2)
+        {
+            return 0;
+        }
+        return 1;
+    }
+    
+    
 }

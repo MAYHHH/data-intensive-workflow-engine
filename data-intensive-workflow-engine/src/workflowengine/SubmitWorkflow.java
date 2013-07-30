@@ -6,7 +6,7 @@ package workflowengine;
 
 import java.io.IOException;
 import workflowengine.communication.Communicable;
-import workflowengine.communication.Message;
+import workflowengine.communication.message.Message;
 import workflowengine.utils.Utils;
 
 /**
@@ -32,8 +32,8 @@ public class SubmitWorkflow
         String inputDir = args[1];
         
         Message msg = new Message(Message.TYPE_SUBMIT_WORKFLOW);
-        msg.setParam("dax_file", daxFile);
-        msg.setParam("input_dir", inputDir);
+        msg.set("dax_file", daxFile);
+        msg.set("input_dir", inputDir);
         
         String host = Utils.getProp("task_manager_host");
         int port = Utils.getIntProp("task_manager_port");

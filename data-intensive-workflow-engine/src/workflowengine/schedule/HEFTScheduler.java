@@ -43,7 +43,10 @@ public class HEFTScheduler implements Scheduler
         {
             rank[i] = -1;
         }
-        rank(settings.getWf().getStartTask());
+        for(Task t : settings.getStartTasks())
+        {
+            rank(t);
+        }
         LinkedList<Task> sortedTasks = getSortedTasks();
         
         return calSchedule(sortedTasks);
@@ -62,7 +65,7 @@ public class HEFTScheduler implements Scheduler
         {
             Task t = sortedTasks.poll();
             
-            if(!taskFinishTime.keySet().containsAll(settings.getWf().getParentTasks(t)))
+            if(!taskFinishTime.keySet().containsAll(settings.getParentTasks(t)))
             {
                 sortedTasks.add(t);
                 continue;
@@ -75,10 +78,10 @@ public class HEFTScheduler implements Scheduler
             double minFinTime = Double.POSITIVE_INFINITY;
             for(Worker w : settings.getWorkerIterable())
             {
-                for(Task p : settings.getWf().getParentTasks(t))
+                for(Task p : settings.getParentTasks(t))
                 {
                     Worker parentWorker = s.getWorkerForTask(p);
-                    double commTime = parentWorker.equals(w) ? 0 : settings.getEs().getTransferTime(parentWorker, w, p.getOutputFilesForTask(t));
+                    double commTime = parentWorker.equals(w) ? 0 : settings.getTransferTime(parentWorker, w, p.getOutputFilesForTask(t));
                     parentFinTime = Math.max(parentFinTime, taskFinishTime.get(p)+commTime);
                 }
                 double finTime = Math.max(parentFinTime, workerReadyTime.get(w))+w.getExecTime(t);
@@ -102,7 +105,6 @@ public class HEFTScheduler implements Scheduler
             double sum = 0;
             for (int j = 0; j < totalWorkers; j++)
             {
-
                 sum = sum + settings.getWorker(j).getExecTime(settings.getTask(i));
             }
             avgExecTime[i] = sum / totalWorkers;
@@ -114,7 +116,7 @@ public class HEFTScheduler implements Scheduler
         for (int t1 = 0; t1 < totalTasks; t1++)
         {
             Task parent = settings.getTask(t1);
-            Collection<Task> children = settings.getWf().getChildTasks(parent);
+            Collection<Task> children = settings.getChildTasks(parent);
             for (Task child : children)
             {
                 WorkflowFile[] files = parent.getOutputFilesForTask(child);
@@ -123,7 +125,7 @@ public class HEFTScheduler implements Scheduler
                 {
                     for (int l = 0; l < totalWorkers; l++)
                     {
-                        sum = sum + settings.getEs().getTransferTime(settings.getWorker(k), settings.getWorker(l), files);
+                        sum = sum + settings.getTransferTime(settings.getWorker(k), settings.getWorker(l), files);
                     }
                 }
                 avgCommTime[t1][settings.getTaskIndex(child)] = sum / totalWorkers / totalWorkers;
@@ -138,7 +140,7 @@ public class HEFTScheduler implements Scheduler
         {
             double r = avgExecTime[ti];
             double max = 0;
-            for (Task c : settings.getWf().getChildTasks(t))
+            for (Task c : settings.getChildTasks(t))
             {
                 int tc = settings.getTaskIndex(c);
                 max = Math.max(max, avgCommTime[ti][tc] + rank(c));
@@ -155,11 +157,11 @@ public class HEFTScheduler implements Scheduler
     
     LinkedList<Task> getSortedTasks()
     {
-        LinkedList<Task> tasks = new LinkedList<>();
-        for(int i=0;i<totalTasks;i++)
-        {
-            tasks.add(settings.getTask(i));
-        }
+        LinkedList<Task> tasks = new LinkedList<>(settings.getTaskList());
+//        for(int i=0;i<totalTasks;i++)
+//        {
+//            tasks.add(settings.getWf().getTask(i));
+//        }
         
         Collections.sort(tasks, new Comparator<Task>() {
 

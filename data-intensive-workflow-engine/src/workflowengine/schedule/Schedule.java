@@ -3,7 +3,6 @@ package workflowengine.schedule;
 import java.util.HashMap;
 import java.util.LinkedList;
 import workflowengine.resource.Worker;
-import workflowengine.workflow.Workflow;
 import workflowengine.workflow.Task;
 
 /**
@@ -12,6 +11,7 @@ import workflowengine.workflow.Task;
  */
 public class Schedule
 {
+
     protected final SchedulerSettings settings;
 //    private Random r;
 //    private final Workflow wf;
@@ -19,6 +19,8 @@ public class Schedule
 //    private final List<Task> taskList;
 //    private final HashMap<Task, Worker> fixedMapping; //For finished tasks
     private HashMap<Task, Worker> mapping;
+    private HashMap<Task, Double> estimatedStart;
+    private HashMap<Task, Double> estimatedFinish;
     private double makespan;
     private double cost;
     private boolean edited;
@@ -26,10 +28,17 @@ public class Schedule
     public Schedule(SchedulerSettings settings)
     {
         this.settings = settings;
+        estimatedStart = new HashMap<>(settings.getTotalTasks()); 
+        estimatedFinish = new HashMap<>(settings.getTotalTasks()); 
         mapping = new HashMap<>(settings.getTotalTasks());
         mapping.putAll(settings.getFixedMapping());
         mapAllTaskToFirstWorker();
         edited = true;
+    }
+
+    public SchedulerSettings getSettings()
+    {
+        return settings;
     }
 
 //    
@@ -57,7 +66,6 @@ public class Schedule
 //        mapAllTaskToFirstWorker();
 //        edited = true;
 //    }
-
     //Copy constructor
     protected Schedule(Schedule sch)
     {
@@ -72,39 +80,37 @@ public class Schedule
 //        this.fixedMapping = sch.fixedMapping;
 //        taskList = sch.taskList;
     }
-    
+
     public Schedule copy()
     {
         return new Schedule(this);
     }
-    
-    
+
     //Map all tasks to the first worker
     private void mapAllTaskToFirstWorker()
     {
         Worker w = settings.getWorker(0);
-        for(int i=0;i<settings.getTotalTasks();i++)
+        for (int i = 0; i < settings.getTotalTasks(); i++)
         {
             setWorkerForTask(i, w);
         }
         this.edited = true;
     }
-    
+
     public void random()
     {
-        for(int i=0;i<settings.getTotalTasks();i++)
+        for (int i = 0; i < settings.getTotalTasks(); i++)
         {
             setWorkerForTask(i, settings.getRandomWorker());
         }
         this.edited = true;
     }
 
-    
     public Worker getWorkerForTask(int taskIndex)
     {
         return mapping.get(settings.getTask(taskIndex));
     }
-    
+
     public Worker getWorkerForTask(Task t)
     {
         return mapping.get(t);
@@ -114,14 +120,16 @@ public class Schedule
     {
         setWorkerForTask(settings.getTask(taskIndex), s);
     }
+
     public void setWorkerForTask(Task t, Worker s)
     {
-        if(!settings.isFixedMapping(t))
+        if (!settings.isFixedTask(t))
         {
             mapping.put(t, s);
             edited = true;
         }
     }
+
     public void setWorkerForTask(int taskIndex, int workerIndex)
     {
         setWorkerForTask(settings.getTask(taskIndex), settings.getWorker(workerIndex));
@@ -136,73 +144,85 @@ public class Schedule
         return makespan;
 
     }
-    
+
     public double getCost()
     {
-        if(edited)
+        if (edited)
         {
             evaluate();
         }
         return cost;
     }
 
-    private void evaluate()
+    public void evaluate()
     {
-        calMakespan();
-        calCost();
+        if(edited)
+        {
+            calMakespan();
+            calCost();
+        }
         edited = false;
     }
-    
+
     private void calMakespan()
     {
         LinkedList<Task> finishedTasks = new LinkedList<>();
-        LinkedList<Task> pendingTasks = new LinkedList<>();
-        Task start = settings.getStartTask();
-        
-        for(Task t : settings.getFixedTasks())
+        estimatedStart.clear();
+        estimatedFinish.clear();
+
+        for (Task t : settings.getFixedTasks())
         {
-            t.setProp("finishTime", 0.0);
+            estimatedStart.put(t, 0.0);
+            estimatedFinish.put(t, 0.0);
+//            t.setProp("finishTime", 0.0);
         }
-        
+
         finishedTasks.addAll(settings.getFixedTasks());
-        pendingTasks.push(start);
-        
-        for(int i=0;i<settings.getTotalWorkers();i++)
+//        pendingTasks.push(start);
+
+        for (int i = 0; i < settings.getTotalWorkers(); i++)
         {
             settings.getWorker(i).setProp("readyTime", 0.0);
         }
-        Workflow wf = settings.getWf();
-        while(!pendingTasks.isEmpty())
+//        Workflow wf = settings.getWf();
+        makespan = 0;
+        LinkedList<Task> pendingTasks = settings.getOrderedTaskQueue();
+        while (!pendingTasks.isEmpty())
         {
-            Task t = pendingTasks.pop();
-            if(finishedTasks.contains(t))
+            Task t = pendingTasks.poll();
+            if (finishedTasks.contains(t))
             {
                 continue;
             }
-            if(!finishedTasks.containsAll(wf.getParentTasks(t)))
+            if (!finishedTasks.containsAll(settings.getParentTasks(t)))
             {
                 pendingTasks.push(t);
                 continue;
             }
-            
+
             Worker s = mapping.get(t);
             double serverReadyTime = s.getDoubleProp("readyTime");
             double parentFinishTime = 0;
-            for(Task p : wf.getParentTasks(t))
+            for (Task p : settings.getParentTasks(t))
             {
-                parentFinishTime = Math.max(parentFinishTime, p.getDoubleProp("finishTime"));
+//                parentFinishTime = Math.max(parentFinishTime, p.getDoubleProp("finishTime"));
+                parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(p));
             }
             double taskStartTime = Math.max(parentFinishTime, serverReadyTime);
-            double taskFinishTime = taskStartTime+s.getExecTime(t);
-            t.setProp("startTime", taskStartTime);
-            t.setProp("finishTime", taskFinishTime);
+            double taskFinishTime = taskStartTime + s.getExecTime(t);
+//            t.setProp("startTime", taskStartTime);
+//            t.setProp("finishTime", taskFinishTime);
+            estimatedStart.put(t, taskStartTime);
+            estimatedFinish.put(t, taskFinishTime);
             s.setProp("readyTime", taskFinishTime);
-            pendingTasks.addAll(wf.getChildTasks(t));
+            makespan = Math.max(makespan, taskFinishTime);
+//            pendingTasks.addAll(wf.getChildTasks(t));
             finishedTasks.add(t);
         }
-        makespan = wf.getEndTask().getDoubleProp("finishTime");
+//        makespan = wf.getEndTask().getDoubleProp("finishTime");
+//        makespan = estimatedFinish.get(settings.getEndTasks());
     }
-    
+
     private void calCost()
     {
         //Calculate cost of schedule
@@ -212,13 +232,26 @@ public class Schedule
             cost += mapping.get(t).getExecCost(t);
         }
     }
-    
+
     public void print()
     {
-        System.out.println(getMakespan()+" "+getCost());
-        for(Task t : mapping.keySet())
+        System.out.println(getMakespan() + " " + getCost());
+        for (Task t : mapping.keySet())
         {
-            System.out.println(t+"->"+mapping.get(t)+ " start: "+ t.getDoubleProp("startTime")+ " end: "+t.getDoubleProp("finishTime"));
+//            System.out.println(t+"->"+mapping.get(t)+ " start: "+ t.getDoubleProp("startTime")+ " end: "+t.getDoubleProp("finishTime"));
+            System.out.println(t + "->" + mapping.get(t) 
+                    + " start: " + estimatedStart.get(t) 
+                    + " end: " + estimatedFinish.get(t));
         }
+    }
+    
+    public double getEstimatedStart(Task t)
+    {
+        return estimatedStart.get(t);
+    }
+    
+    public double getEstimatedFinish(Task t)
+    {
+        return estimatedFinish.get(t);
     }
 }
