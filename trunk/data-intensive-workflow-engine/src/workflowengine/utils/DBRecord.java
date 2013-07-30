@@ -53,7 +53,7 @@ public class DBRecord
                 try
                 {
                     String url = "jdbc:mysql://" + Utils.getProp("DBHost") + ":" + Utils.getProp("DBPort") + "/" + Utils.getProp("DBName");
-//                System.out.println(url);
+//                    System.out.println(url);
                     Class.forName("com.mysql.jdbc.Driver");
                     con = DriverManager.getConnection(
                             url,
@@ -68,14 +68,16 @@ public class DBRecord
         }
     }
 
-    public void set(String key, String val)
+    public DBRecord set(String key, String val)
     {
         record.put(key, val);
+        return this;
     }
 
-    private void set(String key, double val)
+    public DBRecord set(String key, double val)
     {
         set(key, val + "");
+        return this;
     }
 
     public String get(String key)

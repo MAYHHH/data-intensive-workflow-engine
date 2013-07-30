@@ -4,8 +4,6 @@
  */
 package workflowengine;
 
-import workflowengine.utils.Utils;
-
 /**
  *
  * @author Orachun

@@ -2,10 +2,11 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.communication;
+package workflowengine.communication.message;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import workflowengine.communication.HostAddress;
 
 /**
  *
@@ -27,6 +28,9 @@ public class Message implements Serializable
     public static final short TYPE_REGISTER_FILE = 12;
     public static final short TYPE_RESPONSE_TO_MANAGER = 13;
     public static final short TYPE_RESPONSE_TO_WORKER = 14;
+    public static final short TYPE_REGISTER_CHECKPOINT_FILE = 15;
+    public static final short TYPE_CHECKPOINT_FILE_UPLOAD_REQUEST = 16;
+    public static final short TYPE_DISPATCH_TASK_REQUEST = 17;
     
     public static final String PARAM_NEED_RESPONSE = "#PARAM_NEED_RESPONSE";
     public static final String PARAM_MSG_UUID = "#PARAM_MSG_UUID";
@@ -45,6 +49,7 @@ public class Message implements Serializable
     public static final String PARAM_PRINT_BEFORE_SENT = "#PARAM_PRINT_BEFORE_SENT";
     public static final String PARAM_PRINT_AFTER_RECEIVE = "#PARAM_PRINT_AFTER_RECEIVE";
     public static final String PARAM_WORKER_MSGS = "#PARAM_WORKER_MSGS";
+    public static final String PARAM_ATTACHED_MSG = "#PARAM_ATTACHED_MSG";
     
     public static final String STATE_REQUEST = "#STATE_REQUEST";
     public static final String STATE_RESPONSE = "#STATE_RESPONSE";
@@ -65,12 +70,19 @@ public class Message implements Serializable
         this.type = type;
     }
 
+    public Message copy()
+    {
+        Message msg = new Message(this.getType());
+        msg.params.putAll(this.params);
+        return msg;
+    }
+    
     public int getType()
     {
         return type;
     }
 
-    public String getParam(String s)
+    public String get(String s)
     {
         Object o = params.get(s);
         return o == null ? null : o.toString();
@@ -81,7 +93,7 @@ public class Message implements Serializable
         return o == null ? null : (char)o;
     }
 
-    public Object getObjectParam(String s)
+    public Object getObject(String s)
     {
         return params.get(s);
     }
@@ -97,21 +109,22 @@ public class Message implements Serializable
         Object o = params.get(s);
         return o == null ? null : Double.parseDouble(o.toString());
     }
-    public int getIntParam(String s)
+    public int getInt(String s)
     {
         Object o = params.get(s);
         return o == null ? null : Integer.parseInt(o.toString());
     }
 
-    public boolean getBooleanParam(String s)
+    public boolean getBoolean(String s)
     {
         Object o = params.get(s);
         return o == null ? null : Boolean.parseBoolean(o.toString());
     }
     
-    public void setParam(String s, Object o)
+    public Message set(String s, Object o)
     {
         params.put(s, o);
+        return this;
     }
     
     public boolean hasParam(String s)
@@ -125,14 +138,14 @@ public class Message implements Serializable
     }
     public void setParamFromMsg(Message msg, String key)
     {
-        this.params.put(key, msg.getObjectParam(key));
+        this.params.put(key, msg.getObject(key));
     }
     
     public void setParamIfNotExist(String k, Object v)
     {
         if(!hasParam(k))
         {
-            setParam(k, v);
+            set(k, v);
         }
     }
     

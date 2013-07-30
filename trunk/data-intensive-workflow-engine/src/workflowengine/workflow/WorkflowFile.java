@@ -21,6 +21,7 @@ public class WorkflowFile implements Serializable
 //    private int id;
     public static final char TYPE_FILE = 'F';
     public static final char TYPE_DIRECTIORY = 'D';
+    public static final char TYPE_CHECKPOINT_FILE = 'C';
     private double size = 0;//MB
     private String name = "";
     private int dbid;

@@ -8,6 +8,7 @@ package workflowengine.communication;
  *
  * @author Orachun
  */
+import workflowengine.communication.message.Message;
 import java.io.*;
 import java.net.*;
 import java.util.logging.Level;
@@ -52,7 +53,7 @@ public class Communicable
                                 try
                                 {
                                     Message msg = readMessage(socket);
-                                    if (msg.getBooleanParam(MSG_PARAM_FILE_TYPE))
+                                    if (msg.getBoolean(MSG_PARAM_FILE_TYPE))
                                     {
                                         handleFileRequest(msg, socket);
                                     }
@@ -60,11 +61,11 @@ public class Communicable
                                     {
                                         socket.close();
 
-                                        String res = msg.getParam(Message.PARAM_STATE);
-                                        String senderUUID = msg.getParam(Message.PARAM_SOURCE_UUID);
+                                        String res = msg.get(Message.PARAM_STATE);
+                                        String senderUUID = msg.get(Message.PARAM_SOURCE_UUID);
                                         if (res != null && res.equals(Message.STATE_RESPONSE) && senderUUID.equals(commUUID))
                                         {
-                                            String uuid = msg.getParam(Message.PARAM_RESPONSE_FOR_MSG_UUID);
+                                            String uuid = msg.get(Message.PARAM_RESPONSE_FOR_MSG_UUID);
                                             Message orgMsg = waitingMsgs.get(uuid);
                                             responseMsgs.put(uuid, msg);
 
@@ -72,6 +73,7 @@ public class Communicable
                                             {
                                                 System.err.println(msg);
                                                 Utils.printMap(System.err, waitingMsgs);
+                                                System.err.println(name);
                                             }
 
                                             synchronized (orgMsg)
@@ -119,10 +121,10 @@ public class Communicable
         {
             ObjectInputStream os = new ObjectInputStream(socket.getInputStream());
             Message msg = (Message) os.readObject();
-            msg.setParam(Message.PARAM_FROM, socket.getInetAddress().getHostAddress());
-            msg.setParam(Message.PARAM_FROM_PORT, socket.getPort());
+            msg.set(Message.PARAM_FROM, socket.getInetAddress().getHostAddress());
+            msg.set(Message.PARAM_FROM_PORT, socket.getPort());
 
-            if (msg.getBooleanParam(Message.PARAM_PRINT_AFTER_RECEIVE))
+            if (msg.getBoolean(Message.PARAM_PRINT_AFTER_RECEIVE))
             {
                 System.err.println("-----" + name + "-----");
                 System.err.println(msg);
@@ -147,7 +149,7 @@ public class Communicable
     public void sendMessage(String host, int port, Message msg) throws IOException
     {
         prepareMsg(msg);
-        if (msg.getBooleanParam(Message.PARAM_PRINT_BEFORE_SENT))
+        if (msg.getBoolean(Message.PARAM_PRINT_BEFORE_SENT))
         {
             System.err.println("-----" + name + "-----");
             System.err.println(msg);
@@ -172,7 +174,7 @@ public class Communicable
 
     public void setTemplateMsgParam(String key, Object val)
     {
-        this.templateMsg.setParam(key, val);
+        this.templateMsg.set(key, val);
     }
 
     /**
@@ -187,11 +189,11 @@ public class Communicable
      */
     private Message sendForResponse(String targetHost, int targetPort, int responsePort, Message msg, boolean isSync) throws IOException
     {
-        String uuid = Utils.uuid();
-        msg.setParam(Message.PARAM_NEED_RESPONSE, true);
-        msg.setParam(Message.PARAM_MSG_UUID, uuid);
-        msg.setParam(Message.PARAM_STATE, Message.STATE_REQUEST);
-        msg.setParam(Message.PARAM_RESPONSE_PORT, responsePort);
+        String uuid = Utils.uuid(waitingMsgs.keySet());
+        msg.set(Message.PARAM_NEED_RESPONSE, true);
+        msg.set(Message.PARAM_MSG_UUID, uuid);
+        msg.set(Message.PARAM_STATE, Message.STATE_REQUEST);
+        msg.set(Message.PARAM_RESPONSE_PORT, responsePort);
         sendMessage(targetHost, targetPort, msg);
         waitingMsgs.put(uuid, msg);
         if (!isSync)
@@ -256,7 +258,7 @@ public class Communicable
      */
     private Message getResponseMessage(Message sentMsg, boolean checkExisting)
     {
-        String uuid = sentMsg.getParam(Message.PARAM_MSG_UUID);
+        String uuid = sentMsg.get(Message.PARAM_MSG_UUID);
         if (checkExisting && !waitingMsgs.containsKey(uuid))
         {
             return null;
@@ -303,14 +305,23 @@ public class Communicable
      */
     public void sendResponseMsg(HostAddress to, Message original, Message response) throws IOException
     {
-
-//        response.setParamFromMsg(original, Message.PARAM_WORKER_UUID);
+        sendResponseMsg(to.getHost(), to.getPort(), original, response);
+    }
+    
+    /**
+     * Send response message for the given original message
+     *
+     * @param original
+     * @param response
+     * @throws IOException
+     */
+    public void sendResponseMsg(String toHost, int toPort, Message original, Message response) throws IOException
+    {
         response.setParamFromMsg(original, Message.PARAM_SOURCE_UUID);
-        response.setParam(Message.PARAM_STATE, Message.STATE_RESPONSE);
-        response.setParam(Message.PARAM_RESPONSE_FOR_MSG_UUID, original.getParam(Message.PARAM_MSG_UUID));
-        response.setParam(Message.PARAM_RESPONSE_PORT, original.getParam(Message.PARAM_RESPONSE_PORT));
-        sendMessage(to, response);
-//        sendMessage(original.getParam(Message.PARAM_FROM), original.getIntParam(Message.PARAM_RESPONSE_PORT), response);
+        response.set(Message.PARAM_STATE, Message.STATE_RESPONSE);
+        response.set(Message.PARAM_RESPONSE_FOR_MSG_UUID, original.get(Message.PARAM_MSG_UUID));
+        response.set(Message.PARAM_RESPONSE_PORT, original.get(Message.PARAM_RESPONSE_PORT));
+        sendMessage(toHost, toPort, response);
     }
 
     /**
@@ -338,13 +349,13 @@ public class Communicable
 
     private void handleFileRequest(Message msg, Socket s) throws FileTransferException
     {
+            String filePath = msg.get(MSG_PARAM_FILE_PATH);
+            File file = new File(filePath);
         try
         {
-            String filePath = msg.getParam(MSG_PARAM_FILE_PATH);
-            File file = new File(filePath);
             OutputStream sos = s.getOutputStream();
             InputStream sis = s.getInputStream();
-            switch (msg.getParam(MSG_PARAM_FILE_REQUEST_TYPE))
+            switch (msg.get(MSG_PARAM_FILE_REQUEST_TYPE))
             {
                 case MSG_FILE_MSG_TYPE_DOWNLOAD:
                     InputStream is = new FileInputStream(filePath);
@@ -375,7 +386,7 @@ public class Communicable
     private Socket sendFileMsg(String host, int port, Message msg) throws FileTransferException
     {
         prepareMsg(msg);
-        if (msg.getBooleanParam(Message.PARAM_PRINT_BEFORE_SENT))
+        if (msg.getBoolean(Message.PARAM_PRINT_BEFORE_SENT))
         {
             System.err.println("-----" + name + "-----");
             System.err.println(msg);
@@ -406,9 +417,9 @@ public class Communicable
     public void getFile(String host, int port, String remoteFilePath, String localFilePath) throws FileTransferException
     {
         Message msg = new Message(Message.TYPE_NONE);
-        msg.setParam(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
-        msg.setParam(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_DOWNLOAD);
-        msg.setParam(MSG_PARAM_FILE_PATH, remoteFilePath);
+        msg.set(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
+        msg.set(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_DOWNLOAD);
+        msg.set(MSG_PARAM_FILE_PATH, remoteFilePath);
         Socket s = sendFileMsg(host, port, msg);
         File f = new File(localFilePath).getParentFile();
         f.mkdirs();
@@ -442,6 +453,21 @@ public class Communicable
         getFile(host, port, fromRemoteDir+fileName, toLocalDir+fileName);
     }
 
+    
+    /**
+     * Upload a file defined by <i>localFilePath</i> into a remote file 
+     * defined by <i>remoteFilePath</i>
+     * @param host
+     * @param remoteFilePath
+     * @param localFilePath
+     * @throws FileTransferException 
+     */
+    public void sendFile(HostAddress host, String remoteFilePath, String localFilePath) throws FileTransferException
+    {
+        sendFile(host.getHost(), host.getPort(), remoteFilePath, localFilePath);
+    }
+    
+    
     /**
      * Upload a file defined by <i>localFilePath</i> into a remote file 
      * defined by <i>remoteFilePath</i>
@@ -454,9 +480,9 @@ public class Communicable
     public void sendFile(String host, int port, String remoteFilePath, String localFilePath) throws FileTransferException
     {
         Message msg = new Message(Message.TYPE_NONE);
-        msg.setParam(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
-        msg.setParam(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_UPLOAD);
-        msg.setParam(MSG_PARAM_FILE_PATH, remoteFilePath);
+        msg.set(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
+        msg.set(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_UPLOAD);
+        msg.set(MSG_PARAM_FILE_PATH, remoteFilePath);
         Socket s = sendFileMsg(host, port, msg);
         try
         {
@@ -485,9 +511,9 @@ public class Communicable
     public String[] getFileList(String host, int port, String inRemoteDir) throws FileTransferException
     {
         Message msg = new Message(Message.TYPE_NONE);
-        msg.setParam(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
-        msg.setParam(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_LIST);
-        msg.setParam(MSG_PARAM_FILE_PATH, inRemoteDir);
+        msg.set(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
+        msg.set(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_LIST);
+        msg.set(MSG_PARAM_FILE_PATH, inRemoteDir);
         Socket s = sendFileMsg(host, port, msg);
         try
         {
@@ -566,11 +592,11 @@ public class Communicable
     public void sendFile(String host, int port, String remoteFilePath, String localFilePath, long offset, long length) throws FileTransferException
     {
         Message msg = new Message(Message.TYPE_NONE);
-        msg.setParam(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
-        msg.setParam(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_UPLOAD);
-        msg.setParam(MSG_PARAM_FILE_PATH, remoteFilePath);
-        msg.setParam("offset", offset);
-        msg.setParam("length", length);
+        msg.set(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
+        msg.set(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_UPLOAD);
+        msg.set(MSG_PARAM_FILE_PATH, remoteFilePath);
+        msg.set("offset", offset);
+        msg.set("length", length);
 
         Socket s = sendFileMsg(host, port, msg);
         try
