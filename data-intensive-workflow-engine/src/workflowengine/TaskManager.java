@@ -18,14 +18,12 @@ import workflowengine.communication.message.Message;
 import workflowengine.utils.DBRecord;
 import workflowengine.resource.ExecSite;
 import workflowengine.resource.Worker;
-import workflowengine.schedule.RandomScheduler;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.Scheduler;
 import workflowengine.schedule.SchedulerSettings;
 import workflowengine.utils.DBException;
 import workflowengine.utils.Logger;
 import workflowengine.utils.Utils;
-import workflowengine.workflow.DummyWorkflow;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
@@ -39,6 +37,7 @@ public class TaskManager extends Service
 {
 
     public static final Logger logger = new Logger("task-manager.log");
+    public static final int TASK_DELAY_THRESHOLD = 50;
     private static Scheduler sch = null;
     private static TaskManager tm = null;
     private HostAddress nearestEsp;
@@ -49,6 +48,7 @@ public class TaskManager extends Service
     private final Object DISPATCH_LOCK_OBJ = new Object();
     private int count = 0;
     private boolean rescheduling = false;
+    
 
     private TaskManager() throws IOException, ClassNotFoundException, IllegalAccessException, InstantiationException
     {
@@ -58,7 +58,7 @@ public class TaskManager extends Service
         addr = new HostAddress(Utils.getPROP(), "task_manager_host", "task_manager_port");
         nearestEsp = new HostAddress(Utils.getPROP(), "nearest_esp_host", "nearest_esp_port");
         comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_MANAGER);
-        comm.setLocalPort(addr.getPort());
+        comm.setListeningPort(addr.getPort());
         comm.startServer();
 //        startDispatchThread();
     }
@@ -91,7 +91,7 @@ public class TaskManager extends Service
 
     private void dispatchTaskRequest(Message msg)
     {
-        if (isRescheduleNeeded())
+        if (isRescheduleNeeded(msg))
         {
             System.out.println("Rescheduling...");
             logger.log("Rescheduling ...");
@@ -143,11 +143,25 @@ public class TaskManager extends Service
         }).start();
     }
 
-    public boolean isRescheduleNeeded()
+    /**
+     * Check whether the current workflow should be rescheduled.
+     * @param msg message contains info of the task that is just finished
+     * @return true if the start time or finish time is later than estimated
+     * for TASK_DELAY_THRESHOLD seconds
+     */
+    public boolean isRescheduleNeeded(Message msg)
     {
         //TODO: implement this
-        count++;
-        return count == 2;
+        int start = msg.getInt("start");
+        int end = msg.getInt("end");
+        int tid = msg.getInt("tid");
+        DBRecord s = DBRecord.select("schedule", new DBRecord("schedule").set("tid", tid)).get(0);
+        
+        int est_start = s.getInt("estimated_start");
+        int est_finish = s.getInt("estimated_finish");
+        
+        return (start - est_start > TASK_DELAY_THRESHOLD) || (end - est_finish > TASK_DELAY_THRESHOLD);
+//        return false;
     }
 
     public void reschedule(int wfid)
@@ -177,15 +191,15 @@ public class TaskManager extends Service
         Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
         synchronized (DISPATCH_LOCK_OBJ)
         {
+            //Update new schedule
+            updateScheduleForWorkflow(wf, schedule, Utils.time());
+            
             //Checkpoint and suspend all running tasks
             List<Message> msgs = broadcastToWorkers(new Message(Message.TYPE_SUSPEND_TASK), true);
             for (Message m : msgs)
             {
                 comm.getResponseMessage(m);
             }
-            
-            //Update new schedule
-            updateScheduleForWorkflow(wf, schedule);
             rescheduling = false;
             dispatchTask();
         }
@@ -222,7 +236,7 @@ public class TaskManager extends Service
             registerFile(new WorkflowFile[]
             {
                 wff
-            }, nearestEsp);
+            }, nearestEsp, true);
         }
 
         List<WorkflowFile> files = w.getInputFiles();
@@ -231,7 +245,7 @@ public class TaskManager extends Service
             registerFile(new WorkflowFile[]
             {
                 f
-            }, nearestEsp);
+            }, nearestEsp, true);
 //            insertFileToEsp(f.getDbid(), nearestEsp);
         }
         execWorkflow(w);
@@ -243,19 +257,21 @@ public class TaskManager extends Service
         Schedule schedule;
 
         //Synchronized to shedule one workflow at a time
+        long scheduledTime;
         synchronized (this)
         {
             Workflow.setStartedTime(wf.getDbid(), Utils.time());
             schedule = sch.getSchedule(new SchedulerSettings(wf, getExecSite()));
-            Workflow.setScheduledTime(wf.getDbid(), Utils.time());
+            scheduledTime = Utils.time();
+            Workflow.setScheduledTime(wf.getDbid(), scheduledTime);
         }
         schedule.evaluate();
-        setScheduleForWorkflow(wf, schedule);
+        setScheduleForWorkflow(wf, schedule, scheduledTime);
         logger.log("Workflow " + wf.getName() + " is scheduled.");
         dispatchTask();
     }
 
-    public void updateScheduleForWorkflow(Workflow wf, Schedule schedule) throws DBException
+    public void updateScheduleForWorkflow(Workflow wf, Schedule schedule, long startTime) throws DBException
     {
         SchedulerSettings ss = schedule.getSettings();
         for (Task t : wf.getTaskIterator())
@@ -265,14 +281,14 @@ public class TaskManager extends Service
                 Worker w = schedule.getWorkerForTask(t);
                 DBRecord.update("UPDATE schedule "
                         + "SET wkid='" + w.getDbid() + "', "
-                        + "estimated_start='" + Math.round(schedule.getEstimatedStart(t)) + "', "
-                        + "estimated_finish='" + Math.round(schedule.getEstimatedFinish(t)) + "' "
+                        + "estimated_start='" + Math.round(startTime + schedule.getEstimatedStart(t)) + "', "
+                        + "estimated_finish='" + Math.round(startTime + schedule.getEstimatedFinish(t)) + "' "
                         + "WHERE tid='" + t.getDbid() + "'");
             }
         }
     }
 
-    public void setScheduleForWorkflow(Workflow wf, Schedule schedule) throws DBException
+    public void setScheduleForWorkflow(Workflow wf, Schedule schedule, long startTime) throws DBException
     {
         for (Task t : wf.getTaskIterator())
         {
@@ -280,8 +296,8 @@ public class TaskManager extends Service
             new DBRecord("schedule",
                     "wkid", w.getDbid(),
                     "tid", t.getDbid(),
-                    "estimated_start", Math.round(schedule.getEstimatedStart(t)),
-                    "estimated_finish", Math.round(schedule.getEstimatedFinish(t))).insert();
+                    "estimated_start", Math.round(startTime+schedule.getEstimatedStart(t)),
+                    "estimated_finish", Math.round(startTime+schedule.getEstimatedFinish(t))).insert();
         }
     }
 
@@ -315,7 +331,11 @@ public class TaskManager extends Service
                 msg.set("output_files", t.getOutputFiles());
                 if (t.getStatus() == Task.STATUS_SUSPENDED)
                 {
-                    msg.set("migrate", "migrate");
+                    msg.set("migrate", true);
+                }
+                else
+                {
+                    msg.set("migrate", false);
                 }
 
                 /**
@@ -401,7 +421,6 @@ public class TaskManager extends Service
                 "SELECT f.fid, f.name "
                 + "FROM workflow_task_file tf join `file` f on tf.fid = f.fid "
                 + "WHERE `type`='I' AND tid='" + t.getDbid() + "'");
-//        SFTPClient sftp = SFTPUtils.getSFTP(espHost);
         String dir = Utils.getProp("exec_site_file_storage_dir") + t.getWorkingDirSuffix();
         LinkedList<Message> sentMsgs = new LinkedList<>();
         for (DBRecord f : files)
@@ -429,6 +448,7 @@ public class TaskManager extends Service
                     msg.set("dir", dir);
                     msg.set("upload_to", espHost);
                     msg.set("fid", f.get("fid"));
+                    msg.set("file", WorkflowFile.getFileFromDB(f.getInt("fid")));
                     logger.log("Request file " + fname + " from " + r.get("hostname") + " to " + espHost);
                     comm.sendForResponseAsync(r.get("hostname"), r.getInt("port"), addr.getPort(), msg);
                     logger.log("Done");

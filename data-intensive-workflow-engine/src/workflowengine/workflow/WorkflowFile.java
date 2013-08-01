@@ -20,7 +20,7 @@ public class WorkflowFile implements Serializable
 //    private static ArrayList<WorkflowFile> files = new ArrayList<>();
 //    private int id;
     public static final char TYPE_FILE = 'F';
-    public static final char TYPE_DIRECTIORY = 'D';
+//    public static final char TYPE_DIRECTIORY = 'D';
     public static final char TYPE_CHECKPOINT_FILE = 'C';
     private double size = 0;//MB
     private String name = "";
@@ -29,7 +29,7 @@ public class WorkflowFile implements Serializable
     private WorkflowFile(String name, double size, char type)
     {
         this.size = size;
-        this.name = name;
+        this.name = name.trim();
         this.type = type;
     }
     public static WorkflowFile getFile(String name, double size, char type) throws DBException

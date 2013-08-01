@@ -20,7 +20,7 @@ public class Communicable
 {
 
     private String name;
-    private int localPort = 0;
+    private int listeningPort = 0;
     private Message templateMsg = new Message();
     private SynchronizedHashMap<String, Message> waitingMsgs = new SynchronizedHashMap<>();
     private SynchronizedHashMap<String, Message> responseMsgs = new SynchronizedHashMap<>();
@@ -34,7 +34,7 @@ public class Communicable
 
     public void startServer() throws IOException
     {
-        final ServerSocket server = new ServerSocket(localPort);
+        final ServerSocket server = new ServerSocket(listeningPort);
         new Thread(new Runnable()
         {
             @Override
@@ -100,7 +100,7 @@ public class Communicable
                     }
                 }
             }
-        }).start();
+        }, "COMM_LISTENING_THREAD").start();
     }
 
     public void handleMessage(Message msg)
@@ -167,10 +167,16 @@ public class Communicable
         sendMessage(addr.getHost(), addr.getPort(), msg);
     }
 
-    public void setLocalPort(int localPort)
+    public void setListeningPort(int port)
     {
-        this.localPort = localPort;
+        this.listeningPort = port;
     }
+    
+    public int getListeningPort()
+    {
+        return listeningPort;
+    }
+    
 
     public void setTemplateMsgParam(String key, Object val)
     {
@@ -342,7 +348,7 @@ public class Communicable
     ////////   Handle file request
     /////////////////////////////////////////////////////
     private static final String MSG_PARAM_FILE_REQUEST_TYPE = "#MSG_PARAM_FILE_MSG_TYPE#";
-    private static final String MSG_PARAM_FILE_PATH = "#MSG_PARAM_SRC_PATH#";
+    private static final String MSG_PARAM_FILE_PATH = "#MSG_PARAM_FILE_PATH#";
     private static final String MSG_FILE_MSG_TYPE_DOWNLOAD = "#MSG_FILE_MSG_TYPE_DOWNLOAD#";
     private static final String MSG_FILE_MSG_TYPE_UPLOAD = "#MSG_FILE_MSG_TYPE_UPLOAD#";
     private static final String MSG_FILE_MSG_TYPE_LIST = "#MSG_FILE_MSG_TYPE_LIST#";
@@ -366,6 +372,13 @@ public class Communicable
                     file.getParentFile().mkdirs();
                     FileOutputStream fos = new FileOutputStream(file);
                     Utils.pipe(sis, fos);
+                    fos.flush();
+                    fos.getChannel().force(true);
+                    try
+                    {
+                        fos.getFD().sync();
+                    }
+                    catch(SyncFailedException e){}
                     fos.close();
                     
                     break;
@@ -429,6 +442,12 @@ public class Communicable
             InputStream is = s.getInputStream();
             Utils.pipe(is, fos);
             is.close();
+            fos.getChannel().force(true);
+            try
+            {
+                fos.getFD().sync();
+            }
+            catch(SyncFailedException e){}
             fos.close();
             s.close();
         }

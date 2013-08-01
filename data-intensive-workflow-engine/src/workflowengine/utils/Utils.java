@@ -7,11 +7,14 @@ package workflowengine.utils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
@@ -24,13 +27,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
-import org.apache.commons.vfs.FileChangeEvent;
-import org.apache.commons.vfs.FileListener;
-import org.apache.commons.vfs.FileObject;
 import org.apache.commons.vfs.FileSystemException;
-import org.apache.commons.vfs.FileSystemManager;
-import org.apache.commons.vfs.VFS;
-import org.apache.commons.vfs.impl.DefaultFileMonitor;
 
 /**
  *
@@ -39,8 +36,8 @@ import org.apache.commons.vfs.impl.DefaultFileMonitor;
 public class Utils
 {
 
-    public static final double BYTE = 1 / 1024 / 1024;
-    public static final double KB = 1 / 1024;
+    public static final double BYTE = 1.0 / 1024.0 / 1024.0;
+    public static final double KB = 1.0 / 1024.0;
     public static final double MB = 1;
     public static final double GB = 1024;
     public static final double TB = 1024 * 1024;
@@ -373,36 +370,40 @@ public class Utils
         return f.getParentFile().listFiles(ff);
     }
    
-    /**
-     * Wait until the file is closed.
-     */
-    public static boolean waitFile(File f)
+    
+    
+    public static boolean writeToFile(Object o, String filename)
     {
-        long lastModified = f.lastModified();
-        while(true)
+        try
         {
-            try
-            {
-                Thread.sleep(2000);
-            }
-            catch (InterruptedException ex)
-            {
-                return false;
-            }
-            if(lastModified == f.lastModified())
-            {
-                break;
-            }
-            lastModified = f.lastModified();
+            FileOutputStream fout = new FileOutputStream(filename);
+            ObjectOutputStream oos = new ObjectOutputStream(fout);
+            oos.writeObject(o);
+            oos.close();
+            return true;
         }
-        
-        return true;
+        catch(IOException ex)
+        {
+            return false;
+        }
+    }
+    public static Object readFromFile(String filename)
+    {
+        try
+        {
+            FileInputStream fout = new FileInputStream(filename);
+            ObjectInputStream oos = new ObjectInputStream(fout);
+            Object o = oos.readObject();
+            oos.close();
+            return o;
+        }
+        catch(IOException | ClassNotFoundException ex)
+        {
+            return null;
+        }
     }
     
     public static void main(String[] args) throws FileSystemException, InterruptedException
     {
-        System.out.println("waiting..");
-        waitFile(new File("/home/orachun/Desktop/sleep.out"));
-        System.out.println("done.");
     }
 }

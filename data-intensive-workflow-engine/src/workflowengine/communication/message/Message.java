@@ -149,6 +149,11 @@ public class Message implements Serializable
         }
     }
     
+    public boolean needResponse()
+    {
+        return this.getBoolean(PARAM_NEED_RESPONSE);
+    }
+    
     @Override
     public String toString()
     {
