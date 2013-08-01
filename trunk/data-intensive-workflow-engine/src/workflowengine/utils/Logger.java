@@ -4,12 +4,15 @@
  */
 package workflowengine.utils;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.util.Date;
+import java.util.logging.Level;
 
 /**
  *
@@ -47,4 +50,25 @@ public class Logger
         ex.printStackTrace(pw);
         pw.flush();
     }    
+    
+    public OutputStream getOutputStream()
+    {
+        return os;
+    }
+    
+    public void logFileContent(String filename)
+    {
+        try
+        {
+            FileInputStream fis = new FileInputStream(filename);
+            Utils.pipe(fis, os);
+            fis.close();
+            os.flush();
+        }
+        catch (IOException ex)
+        {
+            log("File logging file. ", ex);
+        }
+        
+    }
 }

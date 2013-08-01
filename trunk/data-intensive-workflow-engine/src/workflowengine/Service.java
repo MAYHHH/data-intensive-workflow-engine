@@ -27,16 +27,23 @@ public abstract class Service
      * @param wfs
      * @param espAddr 
      */
-    protected void registerFile(WorkflowFile[] wfs, HostAddress espAddr)
+    protected void registerFile(WorkflowFile[] wfs, HostAddress espAddr, boolean wait)
     {
         Message outputFileMsg = new Message(Message.TYPE_REGISTER_FILE);
         outputFileMsg.set("files", wfs);
         outputFileMsg.set("is_workflow_file", true);
         try
         {
-            comm.sendMessage(espAddr, outputFileMsg);
+            if(wait)
+            {
+                comm.sendForResponseSync(espAddr, comm.getListeningPort(), outputFileMsg);
+            }
+            else
+            {
+                comm.sendMessage(espAddr, outputFileMsg);
+            }
         }
-        catch (IOException ex)
+        catch (IOException | InterruptedException ex)
         {
             logger.log("Cannot send file registering message to " + espAddr + ": " + ex.getMessage(), ex);
         }

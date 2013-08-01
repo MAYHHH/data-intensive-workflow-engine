@@ -455,8 +455,7 @@ public class Workflow implements Serializable
     {
         try
         {
-            FileOutputStream fout = new FileOutputStream(filename);
-            ObjectOutputStream oos = new ObjectOutputStream(fout);
+            ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(filename));
             oos.writeObject(this);
             oos.close();
         }
@@ -506,23 +505,25 @@ public class Workflow implements Serializable
                     i, t.getName(), t.getCmd(), t.getOperations());
             for(WorkflowFile f : t.getInputFiles())
             {
-                String type = f.getType() == WorkflowFile.TYPE_DIRECTIORY ? "dir" : "file";
+//                String type = f.getType() == WorkflowFile.TYPE_DIRECTIORY ? "dir" : "file";
                 pw.printf("\t\t<uses "
-                        + "type=\"%s\" "
+//                        + "type=\"%s\" "
                         + "file=\"%s\" "
                         + "link=\"input\" "
                         + "size=\"%f\"/>\n"
-                        ,type, f.getName(), f.getSize());
+//                        ,type
+                        , f.getName(), f.getSize());
             }
             for(WorkflowFile f : t.getOutputFiles())
             {
-                String type = f.getType() == WorkflowFile.TYPE_DIRECTIORY ? "dir" : "file";
+//                String type = f.getType() == WorkflowFile.TYPE_DIRECTIORY ? "dir" : "file";
                 pw.printf("\t\t<uses "
-                        + "type=\"%s\" "
+//                        + "type=\"%s\" "
                         + "file=\"%s\" "
                         + "link=\"output\" "
                         + "size=\"%f\"/>\n"
-                        ,type, f.getName(), f.getSize());
+//                        ,type
+                        , f.getName(), f.getSize());
             }
             pw.println("\t</job>");
         }
@@ -560,7 +561,9 @@ public class Workflow implements Serializable
             Task t = q.poll();
             taskQueue.remove(t);
             taskQueue.push(t);
-            q.addAll(this.getParentTasks(t));
+            Collection<Task> parents = this.getParentTasks(t);
+            q.removeAll(parents);
+            q.addAll(parents);
         }
         return taskQueue;
     }

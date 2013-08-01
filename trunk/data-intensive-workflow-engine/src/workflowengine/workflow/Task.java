@@ -173,9 +173,7 @@ public class Task implements Serializable, Comparable<Task>
     }
     public void setCheckpointFile(WorkflowFile f)
     {
-        String[] cmds = cmd.split(";");
-        cmd = cmd.replace(cmds[0], f.getName());
-        setCmd(cmd);
+        setCmd(f.getName());
     }
     
     public void insert()
