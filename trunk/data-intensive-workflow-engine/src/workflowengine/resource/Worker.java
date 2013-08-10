@@ -33,8 +33,8 @@ public class Worker
     {
         this.addr = addr;
         this.espAddr = epsAddr;
-        this.cpu = cpu;
-        this.unitCost = unitCost;
+        this.cpu = 1;
+        this.unitCost = 0.08/3600;
         this.freeStorage = freeStorage;
         this.freeMemory = freeMemory;
         this.dbid = dbid;

@@ -11,7 +11,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
-import workflowengine.communication.Communicable;
+import workflowengine.communication.Communicator;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.message.Message;
 import workflowengine.utils.Logger;
@@ -32,7 +32,7 @@ public class TaskExecutor extends Service
     
     private static final int COOR_PORT = Utils.getIntProp("coordinator_port");
     private static final int HEARTBEAT_INTERVAL = 10000; //10 seconds
-    private static Logger logger = new Logger("task-executor.log");
+    private static Logger logger = Utils.getLogger();
     private static TaskExecutor te = null;
     private Properties p = new Properties();
     private short status = STATUS_IDLE;
@@ -57,7 +57,7 @@ public class TaskExecutor extends Service
     @Override
     protected void prepareComm()
     {
-        comm = new Communicable("Worker")
+        comm = new Communicator("Worker")
         {
             @Override
             public void handleMessage(Message msg)
@@ -78,6 +78,9 @@ public class TaskExecutor extends Service
                     case Message.TYPE_SUSPEND_TASK:
                         Thread.currentThread().setName("TYPE_SUSPEND_TASK");
                         suspendCurrentTask(msg);
+                        break;
+                    case Message.TYPE_SHUTDOWN:
+                        System.exit(0);
                         break;
                 }
             }
@@ -228,7 +231,7 @@ public class TaskExecutor extends Service
         String cmdPrefix;
         if(msg.getBoolean("migrate"))
         {
-            cmdPrefix = "dmtcp_restart;-q;-p;"+COOR_PORT+";";
+            cmdPrefix = "dmtcp_restart;-p;"+COOR_PORT+";";
         }
         else
         {
@@ -271,6 +274,7 @@ public class TaskExecutor extends Service
 ////                    client.getFolder(remoteDir + f.getName(), localFilePath, null);
 //                }
 //                else
+                if(!Utils.isFileExist(currentWorkingDir + f.getName()))
                 {
                     comm.getFile(espAddr.getHost(), espAddr.getPort(), fromRemoteDir + f.getName(), currentWorkingDir + f.getName());
 //                    client.getFile(f.getName(), remoteDir, currentWorkingDir);
@@ -350,15 +354,18 @@ public class TaskExecutor extends Service
 //                    .getFolder(Utils.getProp("code_repository_dir") + namespace + "/", currentWorkingDir, null);
             Utils.setExecutableInDirSince(dir, -1);
         }
-        
-        Utils.createProcessBuilder(new String[]{
-            "bash",
-            "-c",
-            "mv",
-            dir+"*",
-            currentWorkingDir
-        });
-
+        try
+        {
+            Utils.createProcessBuilder(new String[]{
+                "bash",
+                "-c",
+                "mv " + dir + "* " + currentWorkingDir
+            }).start().waitFor();
+        }
+        catch(IOException | InterruptedException ex)
+        {
+            throw new FileTransferException(ex);
+        }
 //        String execName = msg.getParam("cmd").split(";")[0];
 //        SFTPUtils.getSFTP(Utils.getProp("code_repository_host"))
 //                .getFile(execName, Utils.getProp("code_repository_dir"), currentWorkingDir);
@@ -391,7 +398,15 @@ public class TaskExecutor extends Service
 
         logger.log("Starting execution of task " + currentTaskName + ".");
         logger.log("Command:   " + cmdString.toString());
-                
+        try
+        {
+            Thread.sleep(1000);
+        }
+        catch (InterruptedException ex)
+        {
+            java.util.logging.Logger.getLogger(TaskExecutor.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        
         return pb.start();
     }
 
@@ -517,11 +532,11 @@ public class TaskExecutor extends Service
                     uploadOutputFiles(msg);
                     logger.log("Done.");
 
-                    setIdle();
-                    logger.log("Updating node status and wait for acknowledgment...");
-                    updateNodeStatus(true);
-                    logger.log("Done.");
                 }
+                setIdle();
+                logger.log("Updating node status and wait for acknowledgment...");
+                updateNodeStatus(true);
+                logger.log("Done.");
                 comm.sendMessage(espAddr, response);
             }
         }
@@ -612,7 +627,7 @@ public class TaskExecutor extends Service
                 Utils.createProcessBuilder(new String[]
                 {
                     "/bin/bash", "-c", 
-                    "mv "+workingDir + "ckpt_" + procName + "_*.dmtcp " + ckptFilePath
+                    "cp "+workingDir + "ckpt_" + procName + "_*.dmtcp " + ckptFilePath
                 }, workingDir, null, null, null).start().waitFor();
 
                 
@@ -675,13 +690,38 @@ public class TaskExecutor extends Service
                     }
                 }
                 
-                
+                //Uploading STDOUT and STDERR files
+                String filename = "";
+                try
+                {
+                    String stdoutFile = ckptDir + taskName + ".stdout";
+                    filename = stdoutFile + CKPT_OUTPUT_FILE_SUFFIX;
+                    comm.sendFile(
+                            espAddr.getHost(),
+                            espAddr.getPort(),
+                            filename,
+                            stdoutFile);
+                    ckptInputs.add(filename);
+                    String stderrFile = ckptDir + taskName + ".stderr";
+                    filename = stderrFile + CKPT_OUTPUT_FILE_SUFFIX;
+                    comm.sendFile(
+                            espAddr.getHost(),
+                            espAddr.getPort(),
+                            filename,
+                            stderrFile);
+                    ckptInputs.add(filename);
+                }
+                catch (FileTransferException ex)
+                {
+                    logger.log("Cannot upload output file " + filename + ".", ex);
+                    complete = false;
+                }
                 
                 //Upload checkpointed file
                 try
                 {
                     comm.sendFile(espAddr, ckptDir+ckptFileName, ckptFilePath);
-                    new File(ckptFilePath).delete();
+//                    new File(ckptFilePath).delete();
                 }
                 catch (FileTransferException ex)
                 {
@@ -719,4 +759,5 @@ public class TaskExecutor extends Service
             }
         }
     }
+    
 }

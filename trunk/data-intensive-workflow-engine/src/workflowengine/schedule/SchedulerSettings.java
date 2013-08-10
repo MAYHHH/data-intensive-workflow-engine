@@ -4,6 +4,8 @@
  */
 package workflowengine.schedule;
 
+import workflowengine.schedule.fc.FC;
+import workflowengine.schedule.fc.MakespanFC;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,11 +36,28 @@ public class SchedulerSettings
     private final int totalWorkers;
     private final Set<Task> fixedTasks;
     private HashMap<String, Object> params = new HashMap<>();
+    private FC fc;
     
-    
-    public SchedulerSettings(Workflow wf, ExecSite es, HashMap<Task, Worker> fixedMapping)
+    public SchedulerSettings(Workflow wf, ExecSite es)
     {
-        originalWf = wf;
+        this(wf, es, (FC)null);
+    }
+    public SchedulerSettings(Workflow originWf, ExecSite es, FC fc)
+    {
+        this(originWf, es, (HashMap<Task, Worker>)null);
+        if(fc == null)
+        {
+            this.fc = new MakespanFC();
+        }
+        else
+        {
+            this.fc = fc;
+        }
+    }
+    
+    public SchedulerSettings(Workflow originWf, ExecSite es, HashMap<Task, Worker> fixedMapping)
+    {
+        this.originalWf = originWf;
         r = new Random();
         this.es = es;
         totalWorkers = es.getTotalWorkers();
@@ -46,17 +65,24 @@ public class SchedulerSettings
         if(fixedMapping == null)
         {
             fixedTasks = new HashSet<>();
-            this.wf = wf;
+            this.wf = originWf;
         }
         else
         {
-            this.wf = generateWorkflow(wf, fixedMapping);
+            this.wf = generateWorkflow(originWf, fixedMapping);
             this.fixedMapping.putAll(fixedMapping);
             fixedTasks = fixedMapping.keySet();
         }
-        totalTasks = wf.getTotalTasks();
-        taskList = wf.getTaskList();
+        totalTasks = this.wf.getTotalTasks();
+        taskList = this.wf.getTaskList();
     }
+
+    public FC getFc()
+    {
+        return fc;
+    }
+    
+    
     
     private Workflow generateWorkflow(Workflow originalWf, HashMap<Task, Worker> fixedMapping)
     {
@@ -85,11 +111,6 @@ public class SchedulerSettings
         return w;
     }
     
-    public SchedulerSettings(Workflow wf, ExecSite es)
-    {
-        this(wf, es, null);
-    }
-
     
     HashMap<Task, Worker> getFixedMapping()
     {
@@ -200,7 +221,19 @@ public class SchedulerSettings
     {
         return totalWorkers;
     }
+
     // </editor-fold>
+    public double getTransferCost(Worker from, Worker to, WorkflowFile file)
+    {
+        return es.getTransferCost(from, to, file);
+    }
+
+    public double getTransferCost(Worker from, Worker to, WorkflowFile[] files)
+    {
+        return es.getTransferCost(from, to, files);
+    }
+    
+    
     
     
     // <editor-fold defaultstate="collapsed" desc="getTransferTime methods">

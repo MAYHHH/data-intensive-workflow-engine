@@ -2,6 +2,7 @@ package workflowengine.schedule;
 
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import workflowengine.resource.Worker;
 import workflowengine.workflow.Task;
 
@@ -24,6 +25,7 @@ public class Schedule
     private double makespan;
     private double cost;
     private boolean edited;
+    private double fitness;
 
     public Schedule(SchedulerSettings settings)
     {
@@ -77,6 +79,9 @@ public class Schedule
         this.cost = sch.cost;
         this.edited = sch.edited;
         this.settings = sch.settings;
+        estimatedStart = new HashMap<>(sch.estimatedStart); 
+        estimatedFinish = new HashMap<>(sch.estimatedFinish); 
+        this.fitness = sch.fitness;
 //        this.fixedMapping = sch.fixedMapping;
 //        taskList = sch.taskList;
     }
@@ -162,6 +167,16 @@ public class Schedule
             calCost();
         }
         edited = false;
+        this.fitness = this.settings.getFc().getFitness(this);
+    }
+    
+    public double getFitness()
+    {
+        if(edited)
+        {
+            evaluate();
+        }
+        return fitness;
     }
 
     private void calMakespan()
@@ -200,7 +215,7 @@ public class Schedule
                 continue;
             }
 
-            Worker s = mapping.get(t);
+            Worker s = this.getWorkerForTask(t);
             double serverReadyTime = s.getDoubleProp("readyTime");
             double parentFinishTime = 0;
             for (Task p : settings.getParentTasks(t))
@@ -210,6 +225,16 @@ public class Schedule
             }
             double taskStartTime = Math.max(parentFinishTime, serverReadyTime);
             double taskFinishTime = taskStartTime + s.getExecTime(t);
+            
+            for (Task c : settings.getChildTasks(t))
+            {
+                Worker cs = this.getWorkerForTask(c);
+                if(!s.equals(cs))
+                {
+                    taskFinishTime += settings.getTransferTime(s, cs, t.getOutputFilesForTask(c));
+                }
+            }
+            
 //            t.setProp("startTime", taskStartTime);
 //            t.setProp("finishTime", taskFinishTime);
             estimatedStart.put(t, taskStartTime);
@@ -231,6 +256,23 @@ public class Schedule
         {
             cost += mapping.get(t).getExecCost(t);
         }
+        
+        LinkedList<Task> queue = settings.getOrderedTaskQueue();
+        while(!queue.isEmpty())
+        {
+            Task t = queue.poll();
+            Worker wt = this.getWorkerForTask(t);
+            for(Task c : settings.getChildTasks(t))
+            {
+                Worker wc = this.getWorkerForTask(c);
+                if(!wt.equals(wc))
+                {
+                    cost += settings.getTransferCost(wt, wc, t.getOutputFilesForTask(c));
+                }
+            }
+        }
+        
+//        cost = makespan*settings.getTotalWorkers();
     }
 
     public void print()
@@ -253,5 +295,15 @@ public class Schedule
     public double getEstimatedFinish(Task t)
     {
         return estimatedFinish.get(t);
+    }
+    
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder();
+        for(int i=0;i<settings.getTotalTasks();i++)
+        {
+            sb.append(settings.getWorkerIndex(this.getWorkerForTask(i))).append(", ");
+        }
+        return sb.toString();
     }
 }

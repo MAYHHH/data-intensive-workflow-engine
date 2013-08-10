@@ -47,8 +47,8 @@ public class Workflow implements Serializable
     public static final char STATUS_SCHEDULED = 'S';
     public static final char STATUS_COMPLETED = 'C';
     
-    public static final double AVG_WORKLOAD = 15000;
-    public static final double AVG_FILE_SIZE = 150 * Utils.MB;
+    public static final double AVG_WORKLOAD = 10;
+    public static final double AVG_FILE_SIZE = 3 * Utils.MB;
     
     private int dbid;
     private char status = STATUS_SUBMITTED;
@@ -99,6 +99,22 @@ public class Workflow implements Serializable
     {
         DBRecord.update("UPDATE workflow SET finished_at='"+time+"' WHERE wfid='"+wfid+"'");
         setStatus(wfid, STATUS_COMPLETED);
+    }
+    public static void setEstimatedFinishTime(int wfid, long time)
+    {
+        DBRecord.update("UPDATE workflow SET est_finish='"+time+"' WHERE wfid='"+wfid+"'");
+        setStatus(wfid, STATUS_COMPLETED);
+    }
+    public static int getEstimatedFinishTime(int wfid)
+    {
+        try
+        {
+            return DBRecord.select("SELECT est_finish FROM workflow WHERE wfid='"+wfid+"'").get(0).getInt("est_finish");
+        }
+        catch(IndexOutOfBoundsException e)
+        {
+            return -1;
+        }
     }
     public static void setStatus(int wfid, char status)
     {
@@ -284,7 +300,7 @@ public class Workflow implements Serializable
     public static Workflow fromDAX(String filename, boolean forSim) throws DBException
     {
         File f = new File(filename);
-        Workflow wf = new Workflow(f.getName());
+        Workflow wf = new Workflow(f.getName(), !forSim);
         try
         {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -303,10 +319,14 @@ public class Workflow implements Serializable
                     
                     String idString = jobElement.getAttribute("id");
                     int id = Integer.parseInt(idString.substring(2));
-//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));
-                    double runtime = AVG_WORKLOAD;
+//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//   
 
-                    String taskName = jobElement.getAttribute("name");
+                    String taskName = jobElement.getAttribute("name");                 
+                    double runtime = Task.getRecordedExecTime(wf.getName(), idString+taskName);
+                    if(runtime == -1)
+                    {
+                        runtime = AVG_WORKLOAD;
+                    }
 //                    String taskNameSpace = jobElement.getAttribute("namespace");
                     Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", namespace);
                     task.addInputFile(WorkflowFile.getFile(taskName, AVG_FILE_SIZE, WorkflowFile.TYPE_FILE));
@@ -398,9 +418,119 @@ public class Workflow implements Serializable
     //        wf.createDummyInputFiles();
             wf.save(Utils.getProp("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
         }
+        
+        System.gc();
         return wf;
     }
     
+    
+    public static Workflow fromDummyDAX(String filename, boolean forSim)
+    {
+        File f = new File(filename);
+        Workflow wf = new Workflow(f.getName(), !forSim);
+        try
+        {
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document dom = db.parse(filename);
+            Element docEle = dom.getDocumentElement();
+            String namespace = "Dummy";
+            NodeList jobNodeList = docEle.getElementsByTagName("job");
+
+            HashMap<Integer, Task> tasks = new HashMap<>();
+            if (jobNodeList != null && jobNodeList.getLength() > 0)
+            {
+                for (int i = 0; i < jobNodeList.getLength(); i++)
+                {
+                    Element jobElement = (Element) jobNodeList.item(i);
+                    
+                    String idString = jobElement.getAttribute("id");
+                    int id = Integer.parseInt(idString.substring(2));
+//                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//   
+
+                    String taskName = jobElement.getAttribute("name");      
+                    double runtime = Math.ceil(Double.parseDouble(jobElement.getAttribute("runtime")));
+                    Task task = Task.getWorkflowTask(idString+taskName, runtime, wf, "", namespace);
+//                    task.addInputFile(WorkflowFile.getFile("dummy.sh", AVG_FILE_SIZE, WorkflowFile.TYPE_FILE));
+                    StringBuilder cmdBuilder = new StringBuilder();
+                    cmdBuilder.append("dummy.sh;").append(runtime).append(";");
+                    tasks.put(id, task);
+
+                    NodeList fileNodeList = jobElement.getElementsByTagName("uses");
+                    for (int j = 0; j < fileNodeList.getLength(); j++)
+                    {
+                        Element fileElement = (Element) fileNodeList.item(j);
+                        String fname = fileElement.getAttribute("file");
+                        String fiotype = fileElement.getAttribute("link");
+                        char ftype = WorkflowFile.TYPE_FILE;
+
+                        double fsize = 1+Math.round(Double.parseDouble(fileElement.getAttribute("size"))*Utils.BYTE);
+                        WorkflowFile wfile = WorkflowFile.getFile(fname, fsize, ftype);
+                        if (fiotype.equals("input"))
+                        {
+                            cmdBuilder.append("i;");
+                            task.addInputFile(wfile);
+                            wf.inputFiles.add(wfile);
+                        }
+                        else
+                        {
+                            cmdBuilder.append("o;");
+                            task.addOutputFile(wfile);
+                            wf.outputFiles.add(wfile);
+                        }
+                        cmdBuilder.append(fname).append(";");
+                        cmdBuilder.append((int)fsize).append(";");
+                    }
+                    cmdBuilder.deleteCharAt(cmdBuilder.length()-1);
+                    task.setCmd(cmdBuilder.toString());
+                    wf.addTask(task);
+                }
+            }
+
+            
+            //Read dependencies
+            jobNodeList = docEle.getElementsByTagName("child");
+            if (jobNodeList != null && jobNodeList.getLength() > 0)
+            {
+                for (int i = 0; i < jobNodeList.getLength(); i++)
+                {
+                    Element el = (Element) jobNodeList.item(i);
+                    String refString = el.getAttribute("ref");
+                    int childRef = Integer.parseInt(refString.substring(2));
+                    Task child = tasks.get(childRef);
+                    NodeList parents = el.getElementsByTagName("parent");
+                    if (parents != null && parents.getLength() > 0)
+                    {
+                        for (int j = 0; j < parents.getLength(); j++)
+                        {
+                            el = (Element) parents.item(j);
+                            String parentRefString = el.getAttribute("ref");
+                            int parentRef = Integer.parseInt(parentRefString.substring(2));
+                            Task parent = tasks.get(parentRef);
+                            wf.addEdge(parent, child);
+                        }
+                    }
+                }
+            }
+        }
+        catch (ParserConfigurationException | SAXException | IOException | NumberFormatException e)
+        {
+            e.printStackTrace();
+            throw new RuntimeException(e.getMessage());
+        }
+        wf.defineStartAndEndTasks();
+        wf.generateFileSet();
+        
+        if(!forSim)
+        {
+            wf.prepareWorkingDirectory();
+//            wf.createDummyInputFiles();
+            wf.save(Utils.getProp("working_dir")+wf.dbid+"/"+wf.dbid+".wfobj");
+        }
+        
+        System.gc();
+        return wf;
+    }
     
     
     public Iterable<Task> getTaskIterator()
@@ -426,21 +556,26 @@ public class Workflow implements Serializable
         }
     }
     
-    public void createDummyInputFiles()
+    public void createDummyInputFiles(String destDir)
     {
-        List<DBRecord> results = DBRecord.select("_workflow_input_file", new DBRecord("_workflow_input_file", "wfid", dbid));
-        for(DBRecord r : results)
+        
+        for(WorkflowFile f : this.inputFiles)
         {
-            String outfile = Utils.getProp("working_dir")+dbid+"/"+r.get("name");
-            try{
-            Process p = Runtime.getRuntime().exec(new String[]
+            String outfile = destDir + f.getName();
+            File file = new File(outfile);
+            file.getParentFile().mkdirs();
+            try
             {
-                "/bin/bash", "-c", "dd if=/dev/zero of="+outfile+" bs=8k count="+(int)Math.round(r.getDouble("estsize")/8192/1024)+" 2>&1 >/dev/null"
-            });
-            p.waitFor();
+                file.createNewFile();
+                Process p = Runtime.getRuntime().exec(new String[]
+                {
+                    "/bin/bash", "-c", "fallocate -l " + ((int) Math.round(f.getSize())*1024*1024) + " "+outfile
+                });
+                p.waitFor();
             }
             catch(IOException | InterruptedException ex)
             {
+                System.out.println(ex.getMessage());
                 TaskManager.logger.log("Exception while creating a dummy input file: "+ex.getMessage());
             }
         }

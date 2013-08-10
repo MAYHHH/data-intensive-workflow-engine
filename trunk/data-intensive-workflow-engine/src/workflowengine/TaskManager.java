@@ -12,7 +12,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import workflowengine.communication.Communicable;
+import java.util.logging.Level;
+import workflowengine.communication.Communicator;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.message.Message;
 import workflowengine.utils.DBRecord;
@@ -21,6 +22,8 @@ import workflowengine.resource.Worker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.Scheduler;
 import workflowengine.schedule.SchedulerSettings;
+import workflowengine.schedule.fc.CostOptimizationFC;
+import workflowengine.schedule.fc.FC;
 import workflowengine.utils.DBException;
 import workflowengine.utils.Logger;
 import workflowengine.utils.Utils;
@@ -36,9 +39,10 @@ import workflowengine.workflow.WorkflowFile;
 public class TaskManager extends Service
 {
 
-    public static final Logger logger = new Logger("task-manager.log");
-    public static final int TASK_DELAY_THRESHOLD = 50;
-    private static Scheduler sch = null;
+    public static final Logger logger = Utils.getLogger();
+    public static final int TASK_DELAY_THRESHOLD = 15;
+    public static final int RESCHEDULING_INTERVAL = 1800;
+//    private static Scheduler sch = null;
     private static TaskManager tm = null;
     private HostAddress nearestEsp;
     private Properties p = new Properties();
@@ -48,13 +52,13 @@ public class TaskManager extends Service
     private final Object DISPATCH_LOCK_OBJ = new Object();
     private int count = 0;
     private boolean rescheduling = false;
-    
+    private long lastReschedulingTime = 0;
 
-    private TaskManager() throws IOException, ClassNotFoundException, IllegalAccessException, InstantiationException
+    private TaskManager() throws IOException, ClassNotFoundException, 
+            IllegalAccessException, InstantiationException
     {
         prepareComm();
-        Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
-        sch = (Scheduler) c.newInstance();
+        getScheduler();
         addr = new HostAddress(Utils.getPROP(), "task_manager_host", "task_manager_port");
         nearestEsp = new HostAddress(Utils.getPROP(), "nearest_esp_host", "nearest_esp_port");
         comm.setTemplateMsgParam(Message.PARAM_FROM_SOURCE, Message.SOURCE_TASK_MANAGER);
@@ -62,11 +66,26 @@ public class TaskManager extends Service
         comm.startServer();
 //        startDispatchThread();
     }
+    
+    private Scheduler getScheduler() 
+    {
+        try
+        {
+            Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
+            Scheduler s = (Scheduler) c.newInstance();
+            return s;
+        }
+        catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex)
+        {
+            java.util.logging.Logger.getLogger(TaskManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
+    }
 
     @Override
     protected void prepareComm()
     {
-        comm = new Communicable("Task Manager")
+        comm = new Communicator("Task Manager")
         {
             @Override
             public void handleMessage(Message msg)
@@ -80,6 +99,9 @@ public class TaskManager extends Service
                         break;
                     case Message.TYPE_DISPATCH_TASK_REQUEST:
                         dispatchTaskRequest(msg);
+                        break;
+                    case Message.TYPE_SHUTDOWN:
+                        System.exit(0);
                         break;
                     default:
                         throw new RuntimeException("The message type is not "
@@ -151,7 +173,15 @@ public class TaskManager extends Service
      */
     public boolean isRescheduleNeeded(Message msg)
     {
-        //TODO: implement this
+//        count++;
+//        return count == 2;
+        
+//        //TODO: implement this
+        if(Utils.time() - lastReschedulingTime < RESCHEDULING_INTERVAL)
+        {
+            return false;
+        }
+        
         int start = msg.getInt("start");
         int end = msg.getInt("end");
         int tid = msg.getInt("tid");
@@ -159,11 +189,11 @@ public class TaskManager extends Service
         
         int est_start = s.getInt("estimated_start");
         int est_finish = s.getInt("estimated_finish");
-        
+        lastReschedulingTime = Utils.time();
         return (start - est_start > TASK_DELAY_THRESHOLD) || (end - est_finish > TASK_DELAY_THRESHOLD);
-//        return false;
+////        return false;
     }
-
+    
     public void reschedule(int wfid)
     {
         //TODO: implement this
@@ -185,32 +215,65 @@ public class TaskManager extends Service
         }
 
         //Calculate new schedule
-        Schedule schedule = sch.getSchedule(new SchedulerSettings(wf, getExecSite(), fixedMapping));
-        schedule.evaluate();
-
-        Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
-        synchronized (DISPATCH_LOCK_OBJ)
+        SchedulerSettings ss = new SchedulerSettings(wf, getExecSite(), fixedMapping);
+        Schedule currentSch = (Schedule)Utils.readFromFile("schedule_wf"+wfid+".sch");
+        ss.setParam("current_schedule", currentSch);
+        Schedule newSchedule = getScheduler().getSchedule(ss);
+        newSchedule.evaluate();
+        
+        int currentFinishTime = Workflow.getEstimatedFinishTime(wfid);
+        int newFinishTime = (int)Math.round(newSchedule.getMakespan() + estimateMigrationTime());
+        if (currentFinishTime > newFinishTime)
         {
-            //Update new schedule
-            updateScheduleForWorkflow(wf, schedule, Utils.time());
-            
-            //Checkpoint and suspend all running tasks
-            List<Message> msgs = broadcastToWorkers(new Message(Message.TYPE_SUSPEND_TASK), true);
-            for (Message m : msgs)
+
+            Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
+            synchronized (DISPATCH_LOCK_OBJ)
             {
-                comm.getResponseMessage(m);
+                //Update new schedule
+                updateScheduleForWorkflow(wf, newSchedule, Utils.time());
+
+                //Checkpoint and suspend all running tasks
+                List<Message> msgs = broadcastToWorkers(new Message(Message.TYPE_SUSPEND_TASK), true);
+                for (Message m : msgs)
+                {
+                    comm.getResponseMessage(m);
+                }
+                rescheduling = false;
+                dispatchTask();
             }
-            rescheduling = false;
-            dispatchTask();
         }
+        else
+        {
+            rescheduling = false;
+        }
+    }
+    
+    public int estimateMigrationTime()
+    {
+        return 0;
     }
 
     public void submitWorkflow(Message msg)
     {
-        logger.log("Workflow " + msg.get("dax_file") + " is submitted.");
-        Workflow w = Workflow.fromDAX(msg.get("dax_file"));
-//        Workflow w = new DummyWorkflow("dummy", 100);
+        String daxFile = msg.get("dax_file");
+        logger.log("Workflow " + daxFile + " is submitted.");
+        Properties p = (Properties)msg.getObject("properties");
+        Utils.setProp(p);
+        Workflow w;
         String inputFileDir = msg.get("input_dir");
+        if(daxFile.endsWith("dummy"))
+        {
+            w = Workflow.fromDummyDAX(daxFile, false);
+            logger.log("Creating dummy input files...");
+            w.createDummyInputFiles(inputFileDir);
+            logger.log("Done.");
+        }
+        else
+        {
+            w = Workflow.fromDAX(daxFile);
+        }
+
+        logger.log("Uploading input files...");
         String remoteInputFileDir = Utils.getProp("exec_site_file_storage_dir") + w.getWorkingDirSuffix();
         try
         {
@@ -221,34 +284,32 @@ public class TaskManager extends Service
             logger.log("Cannot upload input files for " + w.getName() + ": " + ex.getMessage());
             return;
         }
-
+        
+        List<WorkflowFile> files = w.getInputFiles();
         for (File f : new File(inputFileDir).listFiles())
         {
-            WorkflowFile wff;
-            if (f.isDirectory())
-            {
-                wff = WorkflowFile.getFile(f.getName(), 1, WorkflowFile.TYPE_FILE);
-            }
-            else
-            {
-                wff = WorkflowFile.getFile(f.getName(), 1, WorkflowFile.TYPE_FILE);
-            }
+            WorkflowFile wff = WorkflowFile.getFile(f.getName(), f.length()*Utils.BYTE, WorkflowFile.TYPE_FILE);
             registerFile(new WorkflowFile[]
             {
                 wff
             }, nearestEsp, true);
+            files.remove(wff);
         }
 
-        List<WorkflowFile> files = w.getInputFiles();
-        for (WorkflowFile f : files)
+        
+//        List<WorkflowFile> files = w.getInputFiles();
+//        registerFile(files.toArray(new WorkflowFile[files.size()]), nearestEsp, true);
+        
+        
+        logger.log("Done.");
+        if(files.isEmpty())
         {
-            registerFile(new WorkflowFile[]
-            {
-                f
-            }, nearestEsp, true);
-//            insertFileToEsp(f.getDbid(), nearestEsp);
+            execWorkflow(w);
         }
-        execWorkflow(w);
+        else
+        {
+            logger.log("Cannot execute the submitted workflow: some input file is missing.");
+        }
     }
 
     public void execWorkflow(Workflow wf) throws DBException
@@ -261,12 +322,23 @@ public class TaskManager extends Service
         synchronized (this)
         {
             Workflow.setStartedTime(wf.getDbid(), Utils.time());
-            schedule = sch.getSchedule(new SchedulerSettings(wf, getExecSite()));
+            FC fc = new CostOptimizationFC(
+                    Utils.getDoubleProp(CostOptimizationFC.PROP_DEADLINE), 
+                    Utils.getDoubleProp(CostOptimizationFC.PROP_CONSTANT_PENALTY), 
+                    Utils.getDoubleProp(CostOptimizationFC.PROP_WEIGHTED_PENALTY)
+                    );
+            schedule = getScheduler().getSchedule(new SchedulerSettings(wf, getExecSite(), fc));
             scheduledTime = Utils.time();
             Workflow.setScheduledTime(wf.getDbid(), scheduledTime);
+            int estFinish = (int)Math.round(Utils.time()+schedule.getMakespan());
+            Workflow.setEstimatedFinishTime(wf.getDbid(), estFinish);
         }
         schedule.evaluate();
         setScheduleForWorkflow(wf, schedule, scheduledTime);
+        
+        System.gc();
+        
+        Utils.writeToFile(schedule, "schedule_wf"+wf.getDbid()+".sch");
         logger.log("Workflow " + wf.getName() + " is scheduled.");
         dispatchTask();
     }
@@ -403,6 +475,7 @@ public class TaskManager extends Service
                 logger.log("", ex);
             }
         }
+        System.gc();
     }
 
     /**
@@ -518,7 +591,7 @@ public class TaskManager extends Service
         return es;
     }
 
-    public ArrayList<Message> broadcastToWorkers(Message msg, boolean responseNeeded)
+    public ArrayList<Message> broadcastToWorkers(Message msg, boolean waitForResponse)
     {
         List<DBRecord> workers = DBRecord.select("worker", "select uuid, esp_hostname, esp_port from worker");
         ArrayList<Message> msgs = new ArrayList<>();
@@ -529,7 +602,7 @@ public class TaskManager extends Service
             msgs.add(m);
             try
             {
-                if (responseNeeded)
+                if (waitForResponse)
                 {
                     comm.sendForResponseAsync(
                             w.get("esp_hostname"), 
@@ -548,7 +621,7 @@ public class TaskManager extends Service
                 logger.log("Cannot broadcast message to " + w.get("uuid") + ": " + ex.getMessage());
             }
         }
-        if (responseNeeded)
+        if (waitForResponse)
         {
             return msgs;
         }

@@ -24,8 +24,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.apache.commons.vfs.FileSystemException;
 
@@ -87,7 +85,28 @@ public class Utils
             }
         }
     }
+    
+    public static void setProp(Properties p)
+    {
+        initProp();
+        PROP.putAll(p);
+    }
+    
+    public static void setPropIfNotExist(String name, String val)
+    {
+        initProp();
+        if(!PROP.containsKey(name))
+        {
+            PROP.setProperty(name, val);
+        }
+    }
 
+    public static boolean hasProp(String name)
+    {
+        initProp();
+        return PROP.containsKey(name);
+    }
+    
     public static String getProp(String name)
     {
         initProp();
@@ -235,6 +254,7 @@ public class Utils
                 out.write(buffer, 0, len);
             }
         }
+        out.flush();
     }
     
     public static void streamToFile(InputStream in, String filepath, long offset, long length) throws IOException
@@ -401,6 +421,11 @@ public class Utils
         {
             return null;
         }
+    }
+    
+    public static Logger getLogger()
+    {
+        return new Logger(Utils.getProp("log_file"));
     }
     
     public static void main(String[] args) throws FileSystemException, InterruptedException

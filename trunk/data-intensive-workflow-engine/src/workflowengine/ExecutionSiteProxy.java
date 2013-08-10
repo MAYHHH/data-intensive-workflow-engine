@@ -9,7 +9,7 @@ import workflowengine.communication.FileTransferException;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import workflowengine.communication.Communicable;
+import workflowengine.communication.Communicator;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.message.Message;
 import workflowengine.resource.Worker;
@@ -27,7 +27,7 @@ import workflowengine.workflow.WorkflowFile;
 public class ExecutionSiteProxy extends Service
 {
 
-    private static workflowengine.utils.Logger logger = new workflowengine.utils.Logger("execution-site-proxy.log");
+    private static workflowengine.utils.Logger logger = Utils.getLogger();
     private HostAddress managerAddr;
     private int esid;
     private static ExecutionSiteProxy esp = null;
@@ -39,7 +39,7 @@ public class ExecutionSiteProxy extends Service
     {
 
 
-        comm = new Communicable("Execution Site Proxy")
+        comm = new Communicator("Execution Site Proxy")
         {
             @Override
             public void handleMessage(Message msg)
@@ -55,6 +55,10 @@ public class ExecutionSiteProxy extends Service
                     case Message.TYPE_GET_NODE_STATUS:
                     case Message.TYPE_SUSPEND_TASK:
                         forwardMsgToWorker(msg);
+                        break;
+                        
+                    case Message.TYPE_SHUTDOWN:
+                        System.exit(0);
                         break;
 
                     //From executor to manager
@@ -96,7 +100,7 @@ public class ExecutionSiteProxy extends Service
     private void updateTaskStatus(Message msg)
     {
         char status = msg.getCharParam("status");
-//        System.out.println("Update task "+msg.getIntParam("tid")+" to "+status);
+//        System.out.println("Update task "+msg.getInt("tid")+" to "+status);
         Task.updateTaskStatus(
                 msg.getInt("tid"),
                 msg.getInt("start"),
@@ -110,11 +114,6 @@ public class ExecutionSiteProxy extends Service
             {
                 Workflow.setFinishedTime(wfid, Utils.time());
             }
-//            else if (isRescheduleNeeded()) {
-//                logger.log("Rescheduling ...");
-//                reschedule(wfid);
-//                logger.log("Done.");
-//            }
             requestDispatchTask(msg);
         }
     }
@@ -122,7 +121,8 @@ public class ExecutionSiteProxy extends Service
     private void requestDispatchTask(Message taskStatusMsg)
     {
         Message msg = new Message(Message.TYPE_DISPATCH_TASK_REQUEST);
-        msg.set("wfid", taskStatusMsg.get("wfid"));
+        msg.addAllParamsFromMsg(taskStatusMsg);
+        
         try
         {
             comm.sendMessage(managerAddr, msg);
