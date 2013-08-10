@@ -6,7 +6,7 @@ package workflowengine;
 
 import java.io.IOException;
 import static workflowengine.TaskManager.logger;
-import workflowengine.communication.Communicable;
+import workflowengine.communication.Communicator;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.message.Message;
 import workflowengine.utils.Logger;
@@ -18,7 +18,7 @@ import workflowengine.workflow.WorkflowFile;
  */
 public abstract class Service
 {
-    protected Communicable comm;
+    protected Communicator comm;
     protected HostAddress addr;
     protected Service(){};
     

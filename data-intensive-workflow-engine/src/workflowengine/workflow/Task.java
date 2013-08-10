@@ -15,13 +15,13 @@ import workflowengine.utils.Utils;
  */
 public class Task implements Serializable, Comparable<Task>
 {
+
     public static final char STATUS_WAITING = 'W';
     public static final char STATUS_DISPATCHED = 'D';
     public static final char STATUS_EXECUTING = 'E';
     public static final char STATUS_COMPLETED = 'C';
     public static final char STATUS_FAIL = 'F';
     public static final char STATUS_SUSPENDED = 'S';
-    
     private static int count = 0;
     private int id;
     private String workflowName;
@@ -33,10 +33,9 @@ public class Task implements Serializable, Comparable<Task>
     private char status = STATUS_WAITING;
     private String namespace;
     private String cmd;
-    
-    private LinkedList<WorkflowFile> inputs = new LinkedList<>();
-    private LinkedList<WorkflowFile> outputs = new LinkedList<>();
-    
+    private LinkedList<WorkflowFile> inputs = null;
+    private LinkedList<WorkflowFile> outputs = null;
+
     private Task(String name, double operations, Workflow wf, String cmd, String namespace)
     {
         this.name = name;
@@ -58,44 +57,47 @@ public class Task implements Serializable, Comparable<Task>
         this.cmd = cmd;
         this.namespace = namespace;
     }
-    
+
     /**
-     * Return a dummy task which cannot do anything. This task will not
-     * be saved into the database.
+     * Return a dummy task which cannot do anything. This task will not be saved
+     * into the database.
+     *
      * @param name
      * @param wf
-     * @return 
+     * @return
      */
     public static Task getDummyTask(String name, Workflow wf)
     {
         Task t = new Task(name, 0, wf, "", "");
         return t;
     }
+
     public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd, String namespace)
     {
         return getWorkflowTask(name, operations, wf, cmd, namespace, true);
     }
+
     public static Task getWorkflowTask(String name, double operations, Workflow wf, String cmd, String namespace, boolean insert)
     {
         Task t = null;
-        if(Utils.isDBEnabled())
+        if (Utils.isDBEnabled())
         {
             t = getWorkflowTaskFromDB(name, wf.getName());
         }
-        if(t == null)
+        if (t == null)
         {
             t = new Task(name, operations, wf, cmd, namespace);
-            if(insert)
+            if (insert)
             {
                 t.insert();
             }
         }
         return t;
     }
-    
+
     public static Task getWorkflowTaskFromDB(String name, String wfname)
     {
-        if(!Utils.isDBEnabled())
+        if (!Utils.isDBEnabled())
         {
             throw new RuntimeException("Database is disabled");
         }
@@ -104,16 +106,15 @@ public class Task implements Serializable, Comparable<Task>
             DBRecord r = DBRecord.select("workflow_task",
                     "SELECT t.name, t.estopr, t.wfid, w.name as wname, t.tid, t.cmd, t.status, t.namespace "
                     + " FROM workflow_task t JOIN workflow w ON t.wfid = w.wfid "
-                    + " WHERE t.name='" + wfname+":"+name + "'").get(0);
+                    + " WHERE t.name='" + wfname + ":" + name + "'").get(0);
             Task t = new Task(
-                    r.get("name"), 
-                    r.getDouble("estopr"), 
-                    r.get("wname"), 
-                    r.getInt("wfid"), 
-                    r.get("cmd"), 
-                    r.get("namespace"), 
-                    r.getInt("tid")
-            );
+                    r.get("name"),
+                    r.getDouble("estopr"),
+                    r.get("wname"),
+                    r.getInt("wfid"),
+                    r.get("cmd"),
+                    r.get("namespace"),
+                    r.getInt("tid"));
             t.status = r.get("status").charAt(0);
             return t;
         }
@@ -122,9 +123,10 @@ public class Task implements Serializable, Comparable<Task>
             return null;
         }
     }
+
     public static Task getWorkflowTaskFromDB(int dbid) throws DBException
     {
-        if(!Utils.isDBEnabled())
+        if (!Utils.isDBEnabled())
         {
             throw new RuntimeException("Database is disabled");
         }
@@ -135,14 +137,13 @@ public class Task implements Serializable, Comparable<Task>
                     + " FROM workflow_task t JOIN workflow w ON t.wfid = w.wfid "
                     + " WHERE t.tid='" + dbid + "'").get(0);
             Task t = new Task(
-                    r.get("name"), 
-                    r.getDouble("estopr"), 
-                    r.get("wname"), 
-                    r.getInt("wfid"), 
-                    r.get("cmd"), 
-                    r.get("namespace"), 
-                    r.getInt("tid")
-            );
+                    r.get("name"),
+                    r.getDouble("estopr"),
+                    r.get("wname"),
+                    r.getInt("wfid"),
+                    r.get("cmd"),
+                    r.get("namespace"),
+                    r.getInt("tid"));
             t.status = r.get("status").charAt(0);
             return t;
         }
@@ -151,7 +152,7 @@ public class Task implements Serializable, Comparable<Task>
             return null;
         }
     }
-    
+
     public int getWfdbid()
     {
         return wfdbid;
@@ -161,33 +162,34 @@ public class Task implements Serializable, Comparable<Task>
     {
         return status;
     }
-    
+
     public void setCmd(String cmd)
     {
         this.cmd = cmd;
-        DBRecord.update("UPDATE workflow_task SET cmd='"+cmd+"' WHERE tid='"+dbid+"'");
+        DBRecord.update("UPDATE workflow_task SET cmd='" + cmd + "' WHERE tid='" + dbid + "'");
     }
+
     public String getCmd()
     {
         return cmd;
     }
+
     public void setCheckpointFile(WorkflowFile f)
     {
         setCmd(f.getName());
     }
-    
+
     public void insert()
     {
-        if(dbid == -1)
+        if (dbid == -1)
         {
-            DBRecord rec = new DBRecord("workflow_task", 
-                    "wfid", wfdbid, 
-                    "name", toString(), 
-                    "status", status, 
+            DBRecord rec = new DBRecord("workflow_task",
+                    "wfid", wfdbid,
+                    "name", toString(),
+                    "status", status,
                     "estopr", operations,
                     "cmd", cmd,
-                    "namespace", namespace
-            );
+                    "namespace", namespace);
             dbid = rec.insert();
         }
         else
@@ -207,20 +209,66 @@ public class Task implements Serializable, Comparable<Task>
 //            throw new IllegalStateException("This task is not inserted yet.");
 //        }
 //    }
+
     public static int updateTaskStatus(int tid, long start, long end, int exitValue, char status)
     {
+        if(status == STATUS_COMPLETED)
+        {
+            recordExecTime(tid, end-start);
+        }
         return DBRecord.update("UPDATE workflow_task "
-                + "SET start='"+start+"', finish='"+end+"', exit_value='"+exitValue+"', status='"+status+"' "
-                + "WHERE tid='"+tid+"'");
+                + "SET start='" + start + "', finish='" + end + "', exit_value='" + exitValue + "', status='" + status + "' "
+                + "WHERE tid='" + tid + "'");
+    }
+
+    private static void recordExecTime(int tid, long time)
+    {
+        Task t = Task.getWorkflowTaskFromDB(tid);
+        new DBRecord("task_exec_time", 
+                "wfname", t.workflowName,
+                "tname", t.getName(),
+                "exec_time", time).insert();
     }
     
-    public void addInputFile(WorkflowFile f)throws DBException
+    public static int getRecordedExecTime(String wfname, String tname)
     {
+        if(!Utils.isDBEnabled())
+        {
+            return -1;
+        }
+        try
+        {
+            DBRecord r = DBRecord.select("SELECT AVG(exec_time) FROM task_exec_time "
+                    + "WHERE wfname='"+wfname+"' "
+                    + "AND tname='"+tname+"'").get(0);
+            if(r.get("exec_time") == null)
+            {
+                return -1;
+            }
+            return (int)Math.round(r.getDouble("exec_time"));
+        }
+        catch(IndexOutOfBoundsException e)
+        {
+            return -1;
+        }
+    }
+    
+    public void addInputFile(WorkflowFile f) throws DBException
+    {
+        if (inputs == null)
+        {
+            inputs = new LinkedList<>();
+        }
         inputs.add(f);
         new DBRecord("workflow_task_file", "type", "I", "tid", dbid, "fid", f.getDbid()).insert();
     }
-    public void addOutputFile(WorkflowFile f)throws DBException
+
+    public void addOutputFile(WorkflowFile f) throws DBException
     {
+        if (outputs == null)
+        {
+            outputs = new LinkedList<>();
+        }
         outputs.add(f);
         new DBRecord("workflow_task_file", "type", "O", "tid", dbid, "fid", f.getDbid()).insert();
     }
@@ -239,8 +287,6 @@ public class Task implements Serializable, Comparable<Task>
     {
         return namespace;
     }
-    
-    
 
     public String getEdgeName(Task to)
     {
@@ -256,28 +302,36 @@ public class Task implements Serializable, Comparable<Task>
     {
         return operations;
     }
+
     public WorkflowFile[] getInputFiles() throws DBException
     {
-        if(Utils.isDBEnabled())
+        if (Utils.isDBEnabled())
         {
-            List<DBRecord> results = DBRecord.select("workflow_task_file", 
-                    new DBRecord("workflow_task_file", 
-                    "type", "I", 
-                    "tid", dbid));
-            WorkflowFile[] files = new WorkflowFile[results.size()];
-            for (int i=0;i<results.size();i++)
+            if (inputs == null)
             {
-                WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
-                files[i]=f;
+                List<DBRecord> results = DBRecord.select("workflow_task_file",
+                        new DBRecord("workflow_task_file",
+                        "type", "I",
+                        "tid", dbid));
+                WorkflowFile[] files = new WorkflowFile[results.size()];
+                for (int i = 0; i < results.size(); i++)
+                {
+                    WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
+                    files[i] = f;
+                }
+                return files;
             }
-            return files;
+            else
+            {
+                return inputs.toArray(new WorkflowFile[inputs.size()]);
+            }
         }
         else
         {
             return inputs.toArray(new WorkflowFile[inputs.size()]);
         }
     }
-    
+
 //    public String[] getInputFilesString() throws DBException
 //    {
 //        List<DBRecord> results = DBRecord.select(
@@ -293,47 +347,55 @@ public class Task implements Serializable, Comparable<Task>
 //        }
 //        return files;
 //    }
-
     public WorkflowFile[] getOutputFiles() throws DBException
     {
-        if(Utils.isDBEnabled())
+        if (Utils.isDBEnabled())
         {
-            List<DBRecord> results = DBRecord.select("workflow_task_file", 
-                    new DBRecord("workflow_task_file", 
-                    "type", "O", 
-                    "tid", dbid));
-            WorkflowFile[] files = new WorkflowFile[results.size()];
-            for (int i=0;i<results.size();i++)
+            if (outputs == null)
             {
-                WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
-                files[i]=f;
+                List<DBRecord> results = DBRecord.select("workflow_task_file",
+                        new DBRecord("workflow_task_file",
+                        "type", "O",
+                        "tid", dbid));
+                WorkflowFile[] files = new WorkflowFile[results.size()];
+                for (int i = 0; i < results.size(); i++)
+                {
+                    WorkflowFile f = WorkflowFile.getFileFromDB(results.get(i).getInt("fid"));
+                    files[i] = f;
+                }
+                return files;
             }
-            return files;
+            else
+            {
+                return outputs.toArray(new WorkflowFile[outputs.size()]);
+            }
         }
         else
         {
             return outputs.toArray(new WorkflowFile[outputs.size()]);
         }
     }
-    
-    public WorkflowFile[] getOutputFilesForTask(Task t) 
+
+    public WorkflowFile[] getOutputFilesForTask(Task t)
     {
         WorkflowFile[] out = this.getOutputFiles();
         WorkflowFile[] in = t.getInputFiles();
         LinkedList<WorkflowFile> files = new LinkedList<>();
-        for(int i=0;i<out.length;i++)
+        for (int i = 0; i < out.length; i++)
         {
-            for(int j=0;j<in.length;j++)
+            for (int j = 0; j < in.length; j++)
             {
-                if(out[i].equals(in[j]))
+                if (out[i].equals(in[j]))
                 {
                     files.add(out[i]);
                 }
             }
         }
-        return files.toArray(new WorkflowFile[]{});
+        return files.toArray(new WorkflowFile[]
+        {
+        });
     }
-    
+
 //    public String[] getOutputFilesString() throws DBException
 //    {
 //        List<DBRecord> results = DBRecord.select(
@@ -348,7 +410,6 @@ public class Task implements Serializable, Comparable<Task>
 //        }
 //        return files;
 //    }
-
     public void setProp(String name, Object o)
     {
         objProps.put(name, o);
@@ -384,11 +445,10 @@ public class Task implements Serializable, Comparable<Task>
         hash = 17 * hash + Objects.hashCode(this.name);
         return hash;
     }
-    
-    
+
     public String getWorkingDirSuffix()
     {
-        return "wf_"+wfdbid+"/";
+        return "wf_" + wfdbid + "/";
     }
 
     @Override
@@ -396,16 +456,14 @@ public class Task implements Serializable, Comparable<Task>
     {
         int h1 = hashCode();
         int h2 = o.hashCode();
-        if(h1 < h2)
+        if (h1 < h2)
         {
             return -1;
         }
-        if(h1 == h2)
+        if (h1 == h2)
         {
             return 0;
         }
         return 1;
     }
-    
-    
 }

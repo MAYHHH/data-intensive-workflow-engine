@@ -21,8 +21,9 @@ public class ExecSite
 
     private HashMap<String, NetworkLink> edges = new HashMap<>();
     private ArrayList<Worker> workers = new ArrayList<>();
-    private double estLinkSpd = 1.0;
-    private double estLatency = 0.0;
+    private double estLinkSpd = 174;
+    private double estLatency = 0.5;
+    private double transferUnitCost = 0.01/Utils.GB;
     private Iterable<Worker> workerIterable = new Iterable<Worker>()
     {
         @Override
@@ -47,11 +48,25 @@ public class ExecSite
         double total = 0;
         for (WorkflowFile f : files)
         {
-            total = getTransferTime(from, to, f);
+            total += getTransferTime(from, to, f);
         }
         return total;
     }
 
+    public double getTransferCost(Worker from, Worker to, WorkflowFile file)
+    {
+        return transferUnitCost*file.getSize();
+    }
+    public double getTransferCost(Worker from, Worker to, WorkflowFile[] files)
+    {
+        double total = 0;
+        for (WorkflowFile f : files)
+        {
+            total += f.getSize();
+        }
+        return transferUnitCost*total;
+    }
+    
     public void setStorageLinkSpeed(double spd)
     {
         this.estLinkSpd = spd;
@@ -72,6 +87,21 @@ public class ExecSite
         for(int i=0;i<count;i++)
         {
             servers[i] = Worker.updateWorkerStatus(addr, addr, count,  100+Math.random()*50, 100*Utils.GB+Math.random()*50*Utils.GB, 10+Math.random()*3, Utils.uuid());
+//            servers[i] = Worker.getWorker("Server-"+(i+1), 100+Math.random()*50, 100*Utils.GB+Math.random()*50*Utils.GB, 10+Math.random()*3);
+            n.addWorker(servers[i]);
+        }
+        return n;
+    }
+    
+    public static ExecSite generate(int count)
+    {
+        ExecSite n = new ExecSite();
+        n.setStorageLinkSpeed((7+Math.random()*3)*Utils.GB);
+        Worker[] servers = new Worker[count];
+        HostAddress addr = new HostAddress("randomhost", 0);
+        for(int i=0;i<count;i++)
+        {
+            servers[i] = Worker.updateWorkerStatus(addr, addr, -1,  1, 1, 1, Utils.uuid());
 //            servers[i] = Worker.getWorker("Server-"+(i+1), 100+Math.random()*50, 100*Utils.GB+Math.random()*50*Utils.GB, 10+Math.random()*3);
             n.addWorker(servers[i]);
         }

@@ -5,7 +5,8 @@
 package workflowengine;
 
 import java.io.IOException;
-import workflowengine.communication.Communicable;
+import java.util.Properties;
+import workflowengine.communication.Communicator;
 import workflowengine.communication.message.Message;
 import workflowengine.utils.Utils;
 
@@ -17,7 +18,7 @@ public class SubmitWorkflow
 {
     public static void usage()
     {
-        System.out.println("Usage: SubmitWorkflow DAX_FILE INPUT_FILE_DIR");
+        System.out.println("Usage: SubmitWorkflow DAX_FILE INPUT_FILE_DIR [option=value] ...");
     }
     
     public static void main(String[] args) throws IOException
@@ -31,12 +32,20 @@ public class SubmitWorkflow
         String daxFile = args[0];
         String inputDir = args[1];
         
+        Properties p = new Properties();
+        for(int i=2;i<args.length;i++)
+        {
+            String[] prop = args[i].split("=");
+            p.setProperty(prop[0].trim(), prop[1].trim());
+        }
+        
         Message msg = new Message(Message.TYPE_SUBMIT_WORKFLOW);
         msg.set("dax_file", daxFile);
         msg.set("input_dir", inputDir);
+        msg.set("properties", p);
         
         String host = Utils.getProp("task_manager_host");
         int port = Utils.getIntProp("task_manager_port");
-        new Communicable("Workflow Submitor").sendMessage(host, port, msg);
+        new Communicator("Workflow Submitor").sendMessage(host, port, msg);
     }
 }

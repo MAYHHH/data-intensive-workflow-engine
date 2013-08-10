@@ -14,6 +14,7 @@ import workflowengine.communication.HostAddress;
  */
 public class Message implements Serializable
 {
+    public static final short TYPE_SHUTDOWN = -100;
     public static final short TYPE_NONE = -1;
     public static final short TYPE_DISPATCH_TASK = 1;
     public static final short TYPE_GET_NODE_STATUS = 2;

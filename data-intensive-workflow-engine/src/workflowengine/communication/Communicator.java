@@ -8,15 +8,18 @@ package workflowengine.communication;
  *
  * @author Orachun
  */
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.SftpException;
 import workflowengine.communication.message.Message;
 import java.io.*;
 import java.net.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import workflowengine.utils.SFTPClient;
 import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
 
-public class Communicable
+public class Communicator
 {
 
     private String name;
@@ -26,12 +29,25 @@ public class Communicable
     private SynchronizedHashMap<String, Message> responseMsgs = new SynchronizedHashMap<>();
     private final String commUUID = Utils.uuid();
     private static final String MSG_PARAM_FILE_TYPE = "#IS_FILE_MESSAGE#";
+    private boolean isStopped = false;
 
-    public Communicable(String name)
+    public Communicator(String name)
     {
         this.name = name;
     }
 
+    public void stop()
+    {
+        isStopped = true;
+        for(Message msg : waitingMsgs.values())
+        {
+            synchronized(msg)
+            {
+                msg.notifyAll();
+            }
+        }
+    }
+    
     public void startServer() throws IOException
     {
         final ServerSocket server = new ServerSocket(listeningPort);
@@ -40,7 +56,7 @@ public class Communicable
             @Override
             public void run()
             {
-                while (true)
+                while (!isStopped)
                 {
                     try
                     {
@@ -89,14 +105,14 @@ public class Communicable
                                 }
                                 catch (IOException | ClassNotFoundException | FileTransferException ex)
                                 {
-                                    Logger.getLogger(Communicable.class.getName()).log(Level.SEVERE, null, ex);
+                                    Logger.getLogger(Communicator.class.getName()).log(Level.SEVERE, null, ex);
                                 }
                             }
                         }).start();
                     }
                     catch (IOException ex)
                     {
-                        Logger.getLogger(Communicable.class.getName()).log(Level.SEVERE, null, ex);
+                        Logger.getLogger(Communicator.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
             }
@@ -279,7 +295,7 @@ public class Communicable
                 }
                 catch (InterruptedException ex)
                 {
-                    Logger.getLogger(Communicable.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(Communicator.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
         }
@@ -370,6 +386,12 @@ public class Communicable
                     break;
                 case MSG_FILE_MSG_TYPE_UPLOAD:
                     file.getParentFile().mkdirs();
+//                    if(file.createNewFile())
+//                    {
+//                        System.out.println("file "+file.getName()+" is created.");
+//                    }
+//                    sos.write(1);
+                    
                     FileOutputStream fos = new FileOutputStream(file);
                     Utils.pipe(sis, fos);
                     fos.flush();
@@ -429,15 +451,26 @@ public class Communicable
      */
     public void getFile(String host, int port, String remoteFilePath, String localFilePath) throws FileTransferException
     {
+//        try
+//        {
+//            SFTPClient c = SFTPClient.getSFTPClient(host);
+//            c.get(remoteFilePath, localFilePath);
+//        }
+//        catch (JSchException | SftpException e)
+//        {
+//            throw new FileTransferException(e);
+//        }
+        
         Message msg = new Message(Message.TYPE_NONE);
         msg.set(MSG_PARAM_FILE_TYPE, Boolean.TRUE);
         msg.set(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_DOWNLOAD);
         msg.set(MSG_PARAM_FILE_PATH, remoteFilePath);
         Socket s = sendFileMsg(host, port, msg);
-        File f = new File(localFilePath).getParentFile();
-        f.mkdirs();
+        File f = new File(localFilePath);
+        f.getParentFile().mkdirs();
         try
         {
+            f.createNewFile();
             FileOutputStream fos = new FileOutputStream(localFilePath);
             InputStream is = s.getInputStream();
             Utils.pipe(is, fos);
@@ -503,6 +536,20 @@ public class Communicable
         msg.set(MSG_PARAM_FILE_REQUEST_TYPE, MSG_FILE_MSG_TYPE_UPLOAD);
         msg.set(MSG_PARAM_FILE_PATH, remoteFilePath);
         Socket s = sendFileMsg(host, port, msg);
+        
+        
+//        try
+//        {
+//            s.getInputStream().read();
+//            SFTPClient c = SFTPClient.getSFTPClient(host);
+//            c.put(localFilePath, remoteFilePath);
+//        }
+//        catch(IOException | JSchException | SftpException ex)
+//        {
+//            throw new FileTransferException(ex);
+//        }
+        
+        
         try
         {
             FileInputStream fis = new FileInputStream(localFilePath);
